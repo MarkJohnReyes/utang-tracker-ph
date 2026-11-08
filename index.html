@@ -427,7 +427,25 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
       <div class="profile-stat"><small>Total Paid</small><strong id="profilePaid">₱0.00</strong></div>
       <div class="profile-stat"><small>Remaining Balance</small><strong id="profileBalance">₱0.00</strong></div>
     </div>
-    
+    <div class="profile-section">
+      <h4>Payment Schedule & Unpaid Utangs</h4>
+      <p class="muted">Outstanding loans are listed whether or not a payment has been made. Loans without a due date are shown separately as unpaid / no due date.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Due Date</th><th>Utangs</th><th>Outstanding</th><th>Included Utangs / Breakdown</th></tr></thead>
+          <tbody id="profileScheduleRows"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="profile-section">
+      <h4>Loan History</h4>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Date Borrowed</th><th>Due Date</th><th>Principal</th><th>Interest</th><th>Paid</th><th>Balance</th><th>Interest Terms / Status</th></tr></thead>
+        <tbody id="profileLoanRows"></tbody>
+      </table></div>
+    </div>
+    <div class="profile-section"><h4>Payment Timeline</h4><div id="profilePaymentTimeline" class="profile-timeline"></div></div>
+    <div class="profile-section"><h4>Interest Adjustments</h4><div id="profileInterestAdjustments" class="dash-list"></div></div>
   </section>
 
   <section class="app-page" id="page-payments">
@@ -460,8 +478,8 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
 </div>
 
 <script>
-// 1. ADD YOUR  PROJECT DETAILS HERE
-const SUPABASE_URL = "https://fcrkqvzlfvrlmkzcnmdv.supabase.co";
+// 1. ADD YOUR SUPABASE PROJECT DETAILS HERE
+const SUPABASE_URL = "https://nneftfppvoxvagjsivtc.supabase.co";
 const SUPABASE_KEY = "sb_publishable_L8Y_8MQe0dwu3ksvRUnkig_onPgQDfR";
 
 const db = window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
@@ -579,40 +597,47 @@ function loanDueDate(loan){
   else d.setMonth(d.getMonth()+n);
   return d.toLocaleDateString("en-CA");
 }
-function renderPaymentSchedule(){
-  const body=$("paymentScheduleRows");
-  if(!body) return;
+function scheduleGroups(sourceLoans){
   const grouped={};
-  loans.filter(l=>balanceFor(l)>0.009).forEach(l=>{
-    const due=loanDueDate(l);
-    if(!due) return;
+  sourceLoans.filter(l=>balanceFor(l)>0.009).forEach(l=>{
+    const due=loanDueDate(l)||"NO-DUE-DATE";
     if(!grouped[due]) grouped[due]=[];
     grouped[due].push(l);
   });
-  const dates=Object.keys(grouped).sort();
-  if(!dates.length){
-    body.innerHTML='<tr><td colspan="5">No active loans with a due date or payment term.</td></tr>';
-    return;
-  }
-  body.innerHTML=dates.map(date=>{
-    const items=grouped[date];
-    const total=items.reduce((sum,l)=>sum+balanceFor(l),0);
-    const borrowerCount=new Set(items.map(l=>l.borrower_id)).size;
-    const details=items.map(l=>{
-      const borrower=borrowerName(l.borrower_id);
-      const amount=balanceFor(l);
-      const term=l.term_value?`${l.term_value} ${l.term_unit||"period"}`:"Recorded due date";
-      return `<li><strong>${esc(borrower)}</strong> — Utang dated ${esc(l.date_borrowed||"—")}: ${money(amount)} remaining <span class="muted">(${esc(term)}; principal ${money(l.amount)}, paid ${money(paidFor(l.id))})</span></li>`;
-    }).join("");
-    const status=date<today()?' <span class="status overdue">Overdue</span>':date===today()?' <span class="status">Due today</span>':'';
-    return `<tr>
-      <td>${esc(date)}${status}</td>
-      <td>${items.length}</td>
-      <td>${borrowerCount}</td>
-      <td class="schedule-total">${money(total)}</td>
-      <td><details><summary>View ${items.length} utang${items.length===1?"":"s"}</summary><ul class="schedule-breakdown">${details}</ul></details></td>
-    </tr>`;
+  return Object.keys(grouped).sort((a,b)=>{
+    if(a==="NO-DUE-DATE") return 1;
+    if(b==="NO-DUE-DATE") return -1;
+    return a.localeCompare(b);
+  }).map(date=>({date,items:grouped[date]}));
+}
+function scheduleGroupRow(group, includeBorrower){
+  const {date,items}=group;
+  const total=items.reduce((sum,l)=>sum+balanceFor(l),0);
+  const borrowerCount=new Set(items.map(l=>l.borrower_id)).size;
+  const details=items.map(l=>{
+    const borrower=includeBorrower?`<strong>${esc(borrowerName(l.borrower_id))}</strong> — `:"";
+    const due=loanDueDate(l);
+    const term=l.term_value?`${l.term_value} ${l.term_unit||"period"}`:"Recorded due date";
+    return `<li>${borrower}Utang dated ${esc(l.date_borrowed||"—")}: <strong>${money(balanceFor(l))} unpaid</strong> <span class="muted">(principal ${money(l.amount)}, interest ${money(interestFor(l))}, paid ${money(paidFor(l.id))}; ${esc(term)})</span></li>`;
   }).join("");
+  const label=date==="NO-DUE-DATE"?"No due date set":date;
+  const status=date==="NO-DUE-DATE"?' <span class="status overdue">Unpaid · No due date</span>':date<today()?' <span class="status overdue">Overdue</span>':date===today()?' <span class="status">Due today</span>':' <span class="status">Upcoming</span>';
+  const countCells=includeBorrower?`<td>${items.length}</td><td>${borrowerCount}</td>`:`<td>${items.length}</td>`;
+  return `<tr><td>${esc(label)}${status}</td>${countCells}<td class="schedule-total">${money(total)}</td><td><details><summary>View ${items.length} utang${items.length===1?"":"s"}</summary><ul class="schedule-breakdown">${details}</ul></details></td></tr>`;
+}
+function renderPaymentSchedule(){
+  const body=$("paymentScheduleRows");
+  if(!body)return;
+  const groups=scheduleGroups(loans);
+  body.innerHTML=groups.length?groups.map(g=>scheduleGroupRow(g,true)).join(""):
+    '<tr><td colspan="5">No outstanding or unpaid loans.</td></tr>';
+}
+function renderBorrowerPaymentSchedule(borrowerLoans){
+  const body=$("profileScheduleRows");
+  if(!body)return;
+  const groups=scheduleGroups(borrowerLoans);
+  body.innerHTML=groups.length?groups.map(g=>scheduleGroupRow(g,false)).join(""):
+    '<tr><td colspan="4">No unpaid loans for this borrower.</td></tr>';
 }
 
 function openBorrowerProfile(id){
@@ -645,6 +670,7 @@ function renderBorrowerProfile(){
   $("profileInterest").textContent=money(interest);
   $("profilePaid").textContent=money(paid);
   $("profileBalance").textContent=money(balance);
+  renderBorrowerPaymentSchedule(borrowerLoans);
 
   $("profileLoanRows").innerHTML=borrowerLoans.map(l=>{
     const status=balanceFor(l)<=0?"Paid":l.due_date&&l.due_date<today()?"Overdue":"Active";
