@@ -1,0 +1,357 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Utang Tracker PH</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--green:#137c55;--bg:#f4f7f5;--ink:#19352b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px Arial,sans-serif}
+header{background:#145c43;color:white;padding:20px}
+header h2{margin:0 0 5px}
+main{max-width:1050px;margin:25px auto;padding:0 15px}
+.panel{background:white;border-radius:13px;padding:20px;margin-bottom:17px;box-shadow:0 2px 9px #183b2910}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.stat{background:#eaf5ef;padding:17px;border-radius:10px}
+.stat small{color:#587568}
+.stat h2{margin:9px 0 0;font-size:24px}
+input,select,button{font:inherit;padding:11px;border:1px solid #d5e1d9;border-radius:7px}
+input,select{width:100%;background:white}
+button{background:var(--green);color:white;border:0;cursor:pointer}
+button.secondary{background:#e7f1eb;color:#145c43}
+button.danger{background:#a33d3d}
+form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+form button{grid-column:1/-1}
+h3{margin-top:0}
+table{width:100%;border-collapse:collapse;min-width:570px}
+th,td{text-align:left;padding:12px 9px;border-bottom:1px solid #edf0ed}
+th{color:#65796e;font-size:12px;text-transform:uppercase}
+.table-wrap{overflow-x:auto}
+.muted{color:#718078;font-size:13px}
+.status{font-size:12px;border-radius:20px;padding:5px 9px;background:#edf3ef}
+.paid{color:#087443;background:#e1f5e9}
+.overdue{color:#a33d3d;background:#fdeaea}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+#app{display:none}
+#login{max-width:400px;margin:70px auto}
+#message{color:#a33d3d;margin-top:10px}
+@media(max-width:600px){.stats{grid-template-columns:1fr 1fr}form{grid-template-columns:1fr}main{margin-top:15px}.stat h2{font-size:20px}}
+</style>
+</head>
+<body>
+<header>
+  <h2>₱ Utang Tracker PH</h2>
+  <small>Personal Lending Management</small>
+</header>
+
+<section id="login" class="panel">
+  <h2>Administrator Login</h2>
+  <p class="muted">Sign in to manage your lending records.</p>
+  <form id="loginForm">
+    <input id="email" type="email" placeholder="Email address" required>
+    <input id="password" type="password" placeholder="Password" required>
+    <button>Sign In</button>
+  </form>
+  <p id="message"></p>
+</section>
+
+<div id="app">
+<main>
+  <div class="actions" style="justify-content:space-between;margin-bottom:15px">
+    <span id="welcome" class="muted"></span>
+    <div class="actions">
+      <button class="secondary" onclick="exportCSV()">Export CSV</button>
+      <button class="danger" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <section class="stats">
+    <div class="stat"><small>Outstanding Balance</small><h2 id="balance">₱0.00</h2></div>
+    <div class="stat"><small>Total Collected</small><h2 id="collected">₱0.00</h2></div>
+    <div class="stat"><small>Borrowers</small><h2 id="borrowerCount">0</h2></div>
+  </section>
+
+  <section class="panel">
+    <h3>Register Borrower</h3>
+    <form id="borrowerForm">
+      <input id="borrowerName" placeholder="Full name" required>
+      <input id="borrowerPhone" placeholder="Contact number">
+      <input id="borrowerNotes" placeholder="Notes (optional)">
+      <button>Add Borrower</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h3>Record New Utang</h3>
+    <form id="loanForm">
+      <select id="loanBorrower" required>
+        <option value="">Select borrower</option>
+      </select>
+      <input id="loanAmount" type="number" min="0.01" step="0.01" placeholder="Amount (₱)" required>
+      <label class="muted">Date borrowed<input id="loanDate" type="date" required></label>
+      <label class="muted">Due date (optional)<input id="loanDue" type="date"></label>
+      <input id="loanNotes" placeholder="Notes (optional)">
+      <button>Save Utang</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h3>Record Payment</h3>
+    <form id="paymentForm">
+      <select id="paymentLoan" required>
+        <option value="">Select outstanding loan</option>
+      </select>
+      <input id="paymentAmount" type="number" min="0.01" step="0.01" placeholder="Payment amount (₱)" required>
+      <label class="muted">Payment date<input id="paymentDate" type="date" required></label>
+      <input id="paymentNotes" placeholder="Payment notes (optional)">
+      <button>Save Payment</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h3>Borrower Records</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Borrower</th><th>Contact</th><th>Balance</th></tr></thead>
+        <tbody id="borrowerRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h3>Loan Records</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Borrower</th><th>Borrowed</th><th>Due</th><th>Amount</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead>
+        <tbody id="loanRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h3>Payment History</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Borrower</th><th>Payment Date</th><th>Amount</th><th>Notes</th></tr></thead>
+        <tbody id="paymentRows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+</div>
+
+<script>
+// 1. ADD YOUR SUPABASE PROJECT DETAILS HERE
+const SUPABASE_URL = "https://nneftfppvoxvagjsivtc.supabase.co";
+const SUPABASE_KEY = "sb_publishable_wTIbLSxJtlK21Z802UyiNw_cIptRJkx";
+
+const db = window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let user=null, borrowers=[], loans=[], payments=[];
+
+const $ = id => document.getElementById(id);
+const money = n => Number(n||0).toLocaleString("en-PH",{
+  style:"currency",currency:"PHP"
+});
+const esc = s => String(s??"").replace(/[&<>"']/g,c=>({
+  "&":"&amp;","<":"&lt;",">":"&gt;",
+  '"':"&quot;","'":"&#39;"
+}[c]));
+const today = () => new Date().toLocaleDateString("en-CA");
+
+$("loanDate").value=today();
+$("paymentDate").value=today();
+
+async function run(promise){
+  const {data,error}=await promise;
+  if(error) throw error;
+  return data;
+}
+
+async function login(e){
+  e.preventDefault();
+  $("message").textContent="Signing in...";
+  try{
+    await run(db.auth.signInWithPassword({
+      email:$("email").value,
+      password:$("password").value
+    }));
+    $("message").textContent="";
+  }catch(err){$("message").textContent=err.message;}
+}
+
+async function logout(){
+  await db.auth.signOut();
+}
+
+async function load(){
+  if(!user)return;
+  try{
+    [borrowers,loans,payments]=await Promise.all([
+      run(db.from("borrowers").select("*").order("name")),
+      run(db.from("loans").select("*").order("date_borrowed",{ascending:false})),
+      run(db.from("payments").select("*").order("paid_at",{ascending:false}))
+    ]);
+    render();
+  }catch(err){alert("Could not load records: "+err.message);}
+}
+
+function paidFor(id){
+  return payments.filter(p=>p.loan_id===id)
+    .reduce((s,p)=>s+Number(p.amount),0);
+}
+function balanceFor(loan){
+  return Math.max(0,Number(loan.amount)-paidFor(loan.id));
+}
+function borrowerName(id){
+  return borrowers.find(b=>b.id===id)?.name||"Unknown";
+}
+
+function render(){
+  const outstanding=loans.reduce((s,l)=>s+balanceFor(l),0);
+  const collected=payments.reduce((s,p)=>s+Number(p.amount),0);
+
+  $("balance").textContent=money(outstanding);
+  $("collected").textContent=money(collected);
+  $("borrowerCount").textContent=borrowers.length;
+
+  $("loanBorrower").innerHTML='<option value="">Select borrower</option>'+
+    borrowers.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join("");
+
+  $("paymentLoan").innerHTML='<option value="">Select outstanding loan</option>'+
+    loans.filter(l=>balanceFor(l)>0).map(l=>
+      `<option value="${l.id}">${esc(borrowerName(l.borrower_id))} — ${money(balanceFor(l))}</option>`
+    ).join("");
+
+  $("borrowerRows").innerHTML=borrowers.map(b=>{
+    const bal=loans.filter(l=>l.borrower_id===b.id)
+      .reduce((s,l)=>s+balanceFor(l),0);
+    return `<tr><td>${esc(b.name)}</td><td>${esc(b.phone)}</td><td>${money(bal)}</td></tr>`;
+  }).join("")||'<tr><td colspan="3">No borrowers yet.</td></tr>';
+
+  $("loanRows").innerHTML=loans.map(l=>{
+    const bal=balanceFor(l);
+    const status=bal===0?"Paid":
+      l.due_date&&l.due_date<today()?"Overdue":"Unpaid";
+    const cls=status==="Paid"?"paid":status==="Overdue"?"overdue":"status";
+    return `<tr>
+      <td>${esc(borrowerName(l.borrower_id))}</td>
+      <td>${esc(l.date_borrowed)}</td>
+      <td>${esc(l.due_date||"—")}</td>
+      <td>${money(l.amount)}</td>
+      <td>${money(paidFor(l.id))}</td>
+      <td>${money(bal)}</td>
+      <td><span class="status ${cls}">${status}</span></td>
+    </tr>`;
+  }).join("")||'<tr><td colspan="7">No loans recorded.</td></tr>';
+
+  $("paymentRows").innerHTML=payments.map(p=>{
+    const loan=loans.find(l=>l.id===p.loan_id);
+    return `<tr>
+      <td>${esc(loan?borrowerName(loan.borrower_id):"Unknown")}</td>
+      <td>${esc(p.paid_at)}</td>
+      <td>${money(p.amount)}</td>
+      <td>${esc(p.notes)}</td>
+    </tr>`;
+  }).join("")||'<tr><td colspan="4">No payments yet.</td></tr>';
+}
+
+$("loginForm").addEventListener("submit",login);
+
+$("borrowerForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  try{
+    await run(db.from("borrowers").insert({
+      user_id:user.id,
+      name:$("borrowerName").value.trim(),
+      phone:$("borrowerPhone").value.trim(),
+      notes:$("borrowerNotes").value.trim()
+    }));
+    e.target.reset();
+    await load();
+    alert("Borrower added!");
+  }catch(err){alert(err.message);}
+});
+
+$("loanForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const amount=Number($("loanAmount").value);
+  const date=$("loanDate").value;
+  const due=$("loanDue").value;
+  if(due&&due<date)return alert("Due date cannot be before borrowing date.");
+  if(amount<=0)return alert("Enter a valid amount.");
+  try{
+    await run(db.from("loans").insert({
+      user_id:user.id,
+      borrower_id:$("loanBorrower").value,
+      amount,date_borrowed:date,
+      due_date:due||null,
+      notes:$("loanNotes").value.trim()
+    }));
+    e.target.reset();
+    $("loanDate").value=today();
+    await load();
+    alert("Utang recorded!");
+  }catch(err){alert(err.message);}
+});
+
+$("paymentForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const id=$("paymentLoan").value;
+  const amount=Number($("paymentAmount").value);
+  const loan=loans.find(l=>l.id===id);
+  if(!loan||amount<=0)return alert("Enter a valid payment.");
+  if(amount>balanceFor(loan)+0.001)
+    return alert("Payment exceeds remaining balance.");
+  try{
+    await run(db.from("payments").insert({
+      user_id:user.id,loan_id:id,
+      amount,paid_at:$("paymentDate").value,
+      notes:$("paymentNotes").value.trim()
+    }));
+    e.target.reset();
+    $("paymentDate").value=today();
+    await load();
+    alert("Payment recorded!");
+  }catch(err){alert(err.message);}
+});
+
+function exportCSV(){
+  const rows=[["Borrower","Contact","Date Borrowed","Due Date",
+    "Principal","Paid","Balance","Status"]];
+  loans.forEach(l=>{
+    const bal=balanceFor(l);
+    rows.push([
+      borrowerName(l.borrower_id),
+      borrowers.find(b=>b.id===l.borrower_id)?.phone||"",
+      l.date_borrowed,l.due_date||"",
+      l.amount,paidFor(l.id),bal,
+      bal===0?"Paid":l.due_date&&l.due_date<today()?"Overdue":"Unpaid"
+    ]);
+  });
+  const csv=rows.map(row=>row.map(v=>
+    '"'+String(v??"").replace(/"/g,'""')+'"'
+  ).join(",")).join("\r\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));
+  a.download="utang-tracker-report.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+db.auth.onAuthStateChange((event,session)=>{
+  setTimeout(async()=>{
+    user=session?.user||null;
+    $("login").style.display=user?"none":"block";
+    $("app").style.display=user?"block":"none";
+    if(user){
+      $("welcome").textContent="Administrator: "+user.email;
+      await load();
+    }
+  },0);
+});
+</script>
+</body>
+</html>
