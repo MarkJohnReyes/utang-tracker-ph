@@ -125,6 +125,10 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
 .schedule-total{font-weight:700;white-space:nowrap}
 @media(max-width:700px){.borrower-select-panel{display:block}.borrower-select-panel label{display:block;margin-bottom:10px}}
 
+.pivot-borrower{vertical-align:top;font-weight:700;background:rgba(120,150,180,.08)}
+.pivot-subtotal td{background:rgba(120,150,180,.12);font-weight:600}
+.pivot-grand-total td{background:rgba(120,150,180,.2);font-weight:800}
+.numeric{text-align:right;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -260,7 +264,7 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Borrower</th><th>Date Borrowed</th><th>Due Date</th><th>Loan Notes</th><th>Principal</th><th>Balance</th></tr></thead>
+        <thead><tr><th>Name</th><th>Description</th><th>Date Borrowed</th><th>Due Date</th><th>SUM of Amount</th></tr></thead>
         <tbody id="dashboardBorrowerLoanRows"></tbody>
       </table>
     </div>
@@ -412,11 +416,11 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
     </section>
 
     <section class="panel">
-      <h3>All Borrowers — Loan Dates & Notes</h3>
-      <p class="muted">Loans are listed under each borrower, including the borrowed date, due date, and notes.</p>
+      <h3 id="analysisBorrowerTitle">Loan Details — Select a Borrower</h3>
+      <p class="muted">Only the selected borrower’s loans, dates, and notes are shown.</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Borrower</th><th>Date Borrowed</th><th>Due Date</th><th>Loan Notes</th><th>Principal</th><th>Balance</th></tr></thead>
+          <thead><tr><th>Date Borrowed</th><th>Due Date</th><th>Loan Notes</th><th>Principal</th><th>Balance</th></tr></thead>
           <tbody id="analysisBorrowerLoanRows"></tbody>
         </table>
       </div>
@@ -830,19 +834,21 @@ function renderDashboard(){
   $("dashUpcomingAmount").textContent=money(soon.reduce((s,l)=>s+balanceFor(l),0))+" due soon";
   $("dashboardUpdated").textContent="Updated "+new Date().toLocaleString("en-PH");
 
-  const dashboardLoanRows=borrowers.flatMap(b=>{
+  const dashboardLoanRows=borrowers.map(b=>{
     const borrowerLoans=loans.filter(l=>l.borrower_id===b.id);
-    return borrowerLoans.length?borrowerLoans.map(l=>`<tr>
-      <td><strong>${esc(b.name)}</strong></td>
+    const rows=borrowerLoans.map((l,i)=>`<tr>
+      ${i===0?`<td rowspan="${borrowerLoans.length+1}" class="pivot-borrower"><button type="button" class="borrower-name-link" data-dashboard-borrower="${esc(b.id)}">${esc(b.name)}</button></td>`:""}
+      <td class="loan-notes-cell">${esc(l.notes||"—")}</td>
       <td>${esc(l.date_borrowed||"—")}</td>
       <td>${esc(loanDueDate(l)||"—")}</td>
-      <td class="loan-notes-cell">${esc(l.notes||"—")}</td>
-      <td>${money(l.amount)}</td>
-      <td>${money(balanceFor(l))}</td>
-    </tr>`):[`<tr><td><strong>${esc(b.name)}</strong></td><td colspan="3" class="muted">No loans recorded</td><td>—</td><td>—</td></tr>`];
+      <td class="numeric">${money(l.amount)}</td>
+    </tr>`).join("");
+    const total=borrowerLoans.reduce((sum,l)=>sum+Number(l.amount||0),0);
+    return rows+`<tr class="pivot-subtotal"><td colspan="3"><strong>${esc(b.name)} Total</strong></td><td class="numeric"><strong>${money(total)}</strong></td></tr>`;
   }).join("");
-  $("dashboardBorrowerLoanRows").innerHTML=dashboardLoanRows||
-    '<tr><td colspan="6">No borrowers or loans recorded.</td></tr>';
+  const grandTotal=loans.reduce((sum,l)=>sum+Number(l.amount||0),0);
+  $("dashboardBorrowerLoanRows").innerHTML=dashboardLoanRows+
+    `<tr class="pivot-grand-total"><td colspan="4"><strong>Grand Total</strong></td><td class="numeric"><strong>${money(grandTotal)}</strong></td></tr>`;
 
   const monthLabels=[];
   for(let i=5;i>=0;i--){
@@ -984,19 +990,20 @@ function render(){
     return `<tr><td><button type="button" class="borrower-name-link" data-profile-borrower="${esc(b.id)}">${esc(b.name)}</button></td><td>${esc(b.phone)}</td><td>${money(bal)}</td><td><button type="button" class="danger" data-delete-borrower="${esc(b.id)}">Delete</button></td></tr>`;
   }).join("")||'<tr><td colspan="4">No borrowers yet.</td></tr>';
 
-  const analysisRows=borrowers.flatMap(b=>{
-    const borrowerLoans=loans.filter(l=>l.borrower_id===b.id);
-    return borrowerLoans.length?borrowerLoans.map(l=>`<tr>
-      <td><button type="button" class="borrower-name-link" data-profile-borrower="${esc(b.id)}">${esc(b.name)}</button></td>
+  const analysisBorrower=borrowers.find(b=>b.id===selectedBorrowerProfileId);
+  const analysisLoans=analysisBorrower?loans.filter(l=>l.borrower_id===analysisBorrower.id):[];
+  const analysisRows=analysisBorrower?analysisLoans.map(l=>`<tr>
       <td>${esc(l.date_borrowed||"—")}</td>
       <td>${esc(loanDueDate(l)||"—")}</td>
       <td class="loan-notes-cell">${esc(l.notes||"—")}</td>
       <td>${money(l.amount)}</td>
       <td>${money(balanceFor(l))}</td>
-    </tr>`):[`<tr><td><button type="button" class="borrower-name-link" data-profile-borrower="${esc(b.id)}">${esc(b.name)}</button></td><td colspan="3" class="muted">No loans recorded</td><td>—</td><td>—</td></tr>`];
-  }).join("");
-  $("analysisBorrowerLoanRows").innerHTML=analysisRows||
-    '<tr><td colspan="6">No borrowers recorded.</td></tr>';
+    </tr>`).join(""):'';
+  $("analysisBorrowerLoanRows").innerHTML=analysisBorrower?
+    (analysisRows||'<tr><td colspan="5">No loans recorded for this borrower.</td></tr>'):
+    '<tr><td colspan="5" class="muted">Select a borrower from the dashboard summary or the borrower selector above.</td></tr>';
+  const analysisTitle=$("analysisBorrowerTitle");
+  if(analysisTitle) analysisTitle.textContent=analysisBorrower?`Loan Details — ${analysisBorrower.name}`:"Loan Details — Select a Borrower";
 
   $("loanRows").innerHTML=loans.map(l=>{
     const bal=balanceFor(l), interest=interestFor(l), total=totalDueFor(l);
@@ -1041,6 +1048,15 @@ $("borrowerRows").addEventListener("click",e=>{
   if(deleteButton){deleteBorrower(deleteButton.getAttribute("data-delete-borrower"));return;}
   const button=e.target.closest("[data-profile-borrower]");
   if(button)openBorrowerProfile(button.getAttribute("data-profile-borrower"));
+});
+$("dashboardBorrowerLoanRows").addEventListener("click",e=>{
+  const button=e.target.closest("[data-dashboard-borrower]");
+  if(!button)return;
+  const id=button.getAttribute("data-dashboard-borrower");
+  selectedBorrowerProfileId=id;
+  $("borrowerAnalysisSelect").value=id;
+  showPage("borrower-analysis");
+  render();
 });
 $("analysisBorrowerLoanRows").addEventListener("click",e=>{
   const button=e.target.closest("[data-profile-borrower]");
