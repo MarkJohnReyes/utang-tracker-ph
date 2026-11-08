@@ -1,0 +1,1407 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Utang Tracker PH</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{--green:#137c55;--bg:#f4f7f5;--ink:#19352b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px Arial,sans-serif}
+header{background:#145c43;color:white;padding:20px}
+header h2{margin:0 0 5px}
+main{max-width:1050px;margin:25px auto;padding:0 15px}
+.panel{background:white;border-radius:13px;padding:20px;margin-bottom:17px;box-shadow:0 2px 9px #183b2910}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.stat{background:#eaf5ef;padding:17px;border-radius:10px}
+.stat small{color:#587568}
+.stat h2{margin:9px 0 0;font-size:24px}
+input,select,button{font:inherit;padding:11px;border:1px solid #d5e1d9;border-radius:7px}
+input,select{width:100%;background:white}
+button{background:var(--green);color:white;border:0;cursor:pointer}
+button.secondary{background:#e7f1eb;color:#145c43}
+button.danger{background:#a33d3d}
+form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+form button{grid-column:1/-1}
+h3{margin-top:0}
+table{width:100%;border-collapse:collapse;min-width:570px}
+th,td{text-align:left;padding:12px 9px;border-bottom:1px solid #edf0ed}
+th{color:#65796e;font-size:12px;text-transform:uppercase}
+.table-wrap{overflow-x:auto}
+.muted{color:#718078;font-size:13px}
+.status{font-size:12px;border-radius:20px;padding:5px 9px;background:#edf3ef}
+.paid{color:#087443;background:#e1f5e9}
+.overdue{color:#a33d3d;background:#fdeaea}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+#app{display:none}
+#login{max-width:400px;margin:70px auto}
+#message{color:#a33d3d;margin-top:10px}
+.import-help{background:#f2f7f3;border-radius:9px;padding:12px;font-size:13px;line-height:1.5;margin:10px 0}
+.import-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.import-actions input[type=file]{max-width:100%;flex:1}
+.merge-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:600px){.merge-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.stats{grid-template-columns:1fr 1fr}form{grid-template-columns:1fr}main{margin-top:15px}.stat h2{font-size:20px}}
+
+.dashboard-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:22px 0 12px}
+.dashboard-head h3{margin:0}
+.dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.dash-card{background:#fff;border:1px solid #e7eee9;border-radius:12px;padding:16px;box-shadow:0 2px 9px #183b2908}
+.dash-card small{display:block;color:#718078;font-size:12px;margin-bottom:8px}
+.dash-card strong{font-size:22px;display:block;overflow-wrap:anywhere}
+.dash-card .sub{font-size:12px;color:#718078;margin-top:6px}
+.dashboard-columns{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;margin-bottom:14px}
+.dash-panel{background:#fff;border:1px solid #e7eee9;border-radius:12px;padding:18px;min-width:0}
+.dash-panel h4{margin:0 0 14px}
+.bar-list{display:grid;gap:13px}
+.bar-row{display:grid;grid-template-columns:95px 1fr auto;gap:9px;align-items:center;font-size:12px}
+.bar-track{height:10px;border-radius:20px;background:#edf3ef;overflow:hidden}
+.bar-fill{height:100%;border-radius:20px;background:#19845c;min-width:0}
+.bar-fill.alt{background:#8bb9a1}
+.bar-fill.warn{background:#d69a43}
+.bar-fill.red{background:#c76c6c}
+.month-bars{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;align-items:end;height:155px;padding-top:10px}
+.month-col{height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;min-width:0}
+.month-bar-wrap{height:115px;width:100%;display:flex;align-items:flex-end;justify-content:center}
+.month-bar{width:min(28px,70%);min-height:3px;background:#19845c;border-radius:5px 5px 0 0}
+.month-col small{font-size:10px;color:#718078}
+.month-col b{font-size:10px;font-weight:600;white-space:nowrap}
+.dash-list{display:grid;gap:0}
+.dash-list-item{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #edf0ed;font-size:13px}
+.dash-list-item:last-child{border-bottom:0}
+.dash-empty{color:#718078;font-size:13px;padding:8px 0}
+@media(max-width:800px){.dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.dashboard-columns{grid-template-columns:1fr}}
+@media(max-width:420px){.dashboard-grid{grid-template-columns:1fr 1fr}.dash-card{padding:12px}.dash-card strong{font-size:18px}.bar-row{grid-template-columns:78px 1fr auto}}
+.loan-notes-cell{min-width:180px;white-space:normal;max-width:340px}
+.borrower-actions{display:flex;gap:6px;flex-wrap:wrap}
+.borrower-actions button{padding:7px 9px;font-size:12px}
+
+
+.analytics-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.analytics-panel{background:#fff;border:1px solid #e7eee9;border-radius:12px;padding:18px;min-width:0}
+.analytics-panel h4{margin:0 0 8px}
+.chart-note{font-size:12px;color:#718078;margin:0 0 12px}
+.chart-scroll{width:100%;overflow-x:auto}
+.chart-scroll svg{display:block;width:100%;min-width:360px;height:auto}
+.chart-empty{padding:28px 10px;text-align:center;color:#718078;font-size:13px}
+.chart-controls{display:flex;align-items:center;gap:8px;margin:10px 0}
+.chart-controls select{max-width:240px}
+@media(max-width:800px){.analytics-grid{grid-template-columns:1fr}}
+
+
+.borrower-name-link{background:none;color:#145c43;padding:0;text-decoration:underline;text-align:left;font-weight:600}
+.profile-top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.profile-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}
+.profile-stat{background:#f2f7f4;border-radius:9px;padding:13px}
+.profile-stat small{display:block;color:#718078;font-size:12px}
+.profile-stat strong{display:block;font-size:19px;margin-top:6px;overflow-wrap:anywhere}
+.profile-section{margin-top:20px}
+.profile-section h4{margin:0 0 10px}
+.profile-timeline{display:grid;gap:0}
+.timeline-item{display:grid;grid-template-columns:105px 1fr auto;gap:12px;align-items:center;padding:12px 4px;border-bottom:1px solid #edf0ed;font-size:13px}
+.timeline-date{color:#718078}
+.timeline-amount{font-weight:700;white-space:nowrap}
+.profile-empty{padding:20px;text-align:center;color:#718078}
+@media(max-width:700px){.profile-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.timeline-item{grid-template-columns:85px 1fr}.timeline-amount{grid-column:2}}
+
+
+.app-nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 20px;padding:7px;background:#e8f0eb;border-radius:12px;position:sticky;top:0;z-index:5}
+.nav-tab{background:transparent;color:#315746;padding:11px 16px;border-radius:8px;font-weight:700}
+.nav-tab.active{background:#145c43;color:#fff;box-shadow:0 2px 6px #183b2920}
+.app-page{display:none}
+.app-page.active{display:block}
+.page-intro{margin:0 0 14px;color:#718078}
+@media(max-width:520px){.app-nav{display:grid;grid-template-columns:1fr 1fr}.nav-tab:last-child{grid-column:1/-1}}
+
+
+.borrower-select-panel{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+.borrower-select-panel label{flex:1;min-width:240px}
+.schedule-note{background:#f3f8f5;border-left:4px solid #137c55;padding:12px;border-radius:7px;margin:10px 0 15px;color:#52695d;font-size:13px}
+.schedule-breakdown{margin:6px 0 0;padding-left:18px;color:#52695d;font-size:13px}
+.schedule-breakdown li{margin:4px 0}
+.schedule-total{font-weight:700;white-space:nowrap}
+@media(max-width:700px){.borrower-select-panel{display:block}.borrower-select-panel label{display:block;margin-bottom:10px}}
+
+.pivot-borrower{vertical-align:top;font-weight:700;background:rgba(120,150,180,.08)}
+.pivot-subtotal td{background:rgba(120,150,180,.12);font-weight:600}
+.pivot-grand-total td{background:rgba(120,150,180,.2);font-weight:800}
+.numeric{text-align:right;white-space:nowrap}
+</style>
+</head>
+<body>
+<header>
+  <h2>₱ Utang Tracker PH</h2>
+  <small>Personal Lending Management</small>
+</header>
+
+<section id="login" class="panel">
+  <h2>Administrator Login</h2>
+  <p class="muted">Sign in to manage your lending records.</p>
+  <form id="loginForm">
+    <input id="email" type="email" placeholder="Email address" required>
+    <input id="password" type="password" placeholder="Password" required>
+    <button>Sign In</button>
+  </form>
+  <p id="message"></p>
+</section>
+
+<div id="app">
+<main>
+  <div class="actions" style="justify-content:space-between;margin-bottom:15px">
+    <span id="welcome" class="muted"></span>
+    <div class="actions">
+      <button class="secondary" onclick="exportCSV()">Export CSV</button>
+      <button class="danger" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <nav class="app-nav" aria-label="Main navigation">
+    <button type="button" class="nav-tab active" data-page="dashboard">Dashboard & Summary</button>
+    <button type="button" class="nav-tab" data-page="utangs">Borrowers & Utangs</button>
+    <button type="button" class="nav-tab" data-page="borrower-analysis">Borrower Analysis</button>
+    <button type="button" class="nav-tab" data-page="payments">Payments</button>
+  </nav>
+
+
+  <section class="app-page" id="page-dashboard">
+  <div class="dashboard-head">
+    <h3>Dashboard Overview</h3>
+    <span class="muted" id="dashboardUpdated">Live summary of your lending records</span>
+  </div>
+  <section class="dashboard-grid">
+    <div class="dash-card"><small>Total Principal Lent</small><strong id="dashPrincipal">₱0.00</strong><div class="sub">All recorded loans</div></div>
+    <div class="dash-card"><small>Outstanding Balance</small><strong id="dashOutstanding">₱0.00</strong><div class="sub">Principal plus interest, less payments</div></div>
+    <div class="dash-card"><small>Overdue Loans</small><strong id="dashOverdue">0</strong><div class="sub" id="dashOverdueAmount">₱0.00 overdue balance</div></div>
+    <div class="dash-card"><small>Interest Accrued</small><strong id="dashInterest">₱0.00</strong><div class="sub">Based on current loan terms</div></div>
+    <div class="dash-card"><small>Total Payments Collected</small><strong id="dashCollected">₱0.00</strong><div class="sub">All recorded payments</div></div>
+    <div class="dash-card"><small>Active Loans</small><strong id="dashActive">0</strong><div class="sub">Loans with remaining balance</div></div>
+    <div class="dash-card"><small>Fully Paid Loans</small><strong id="dashPaid">0</strong><div class="sub">Completed loan records</div></div>
+    <div class="dash-card"><small>Upcoming Due (7 days)</small><strong id="dashUpcoming">0</strong><div class="sub" id="dashUpcomingAmount">₱0.00 due soon</div></div>
+  </section>
+
+
+  <section class="analytics-grid">
+    <div class="analytics-panel">
+      <h4>Outstanding Balance by Borrower</h4>
+      <p class="chart-note">Remaining principal and interest for each borrower</p>
+      <div id="borrowerBalanceChart" class="chart-scroll"></div>
+    </div>
+    <div class="analytics-panel">
+      <h4>Payment History Trend</h4>
+      <p class="chart-note">Total payments received each month</p>
+      <div id="paymentTrendChart" class="chart-scroll"></div>
+    </div>
+  </section>
+  <section class="analytics-grid">
+    <div class="analytics-panel">
+      <h4>Borrower Payment History</h4>
+      <p class="chart-note">Monthly payments for the selected borrower</p>
+      <div class="chart-controls">
+        <select id="borrowerChartSelect" aria-label="Select borrower for payment history">
+          <option value="">Select borrower</option>
+        </select>
+      </div>
+      <div id="borrowerPaymentChart" class="chart-scroll"></div>
+    </div>
+    <div class="analytics-panel">
+      <h4>Loan Composition</h4>
+      <p class="chart-note">Principal, interest accrued, and payments collected</p>
+      <div id="loanCompositionChart" class="chart-scroll"></div>
+    </div>
+  </section>
+
+  <section class="dashboard-columns">
+    <div class="dash-panel">
+      <h4>Payments Collected — Last 6 Months</h4>
+      <div id="monthlyCollections" class="month-bars"></div>
+      <p class="muted" style="margin:10px 0 0">Monthly totals are based on payment dates.</p>
+    </div>
+    <div class="dash-panel">
+      <h4>Loan Portfolio Status</h4>
+      <div id="portfolioBars" class="bar-list"></div>
+    </div>
+  </section>
+
+  <section class="dashboard-columns">
+    <div class="dash-panel">
+      <h4>Overdue Loans</h4>
+      <div id="overduePreview" class="dash-list"></div>
+    </div>
+    <div class="dash-panel">
+      <h4>Recent Payments</h4>
+      <div id="recentPayments" class="dash-list"></div>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="stat"><small>Outstanding Balance</small><h2 id="balance">₱0.00</h2></div>
+    <div class="stat"><small>Total Collected</small><h2 id="collected">₱0.00</h2></div>
+    <div class="stat"><small>Borrowers</small><h2 id="borrowerCount">0</h2></div>
+  </section>
+
+
+  <section class="panel">
+    <div class="dashboard-head">
+      <h3>Payment Due Schedule</h3>
+      <span class="muted">Upcoming and overdue loan maturities</span>
+    </div>
+    <p class="schedule-note">Each row groups the outstanding amounts due on a date. Expand the breakdown to see exactly which utangs make up the scheduled total. The current app stores one due date per loan, so this schedule uses each loan's maturity date; it does not invent weekly or monthly installments.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Due Date</th><th>Loans Included</th><th>Borrowers</th><th>Scheduled Amount</th><th>Breakdown of Utangs Included</th></tr></thead>
+        <tbody id="paymentScheduleRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="dashboard-head">
+      <h3>Borrower Loan Summary</h3>
+      <span class="muted">Every borrower and their recorded loan dates and notes</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Description</th><th>Date Borrowed</th><th>Due Date</th><th>SUM of Amount</th></tr></thead>
+        <tbody id="dashboardBorrowerLoanRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  </section>
+
+  <section class="app-page" id="page-utangs">
+  <section class="panel">
+    <h3>Register Borrower</h3>
+    <form id="borrowerForm">
+      <input id="borrowerName" placeholder="Full name" required>
+      <input id="borrowerPhone" placeholder="Contact number">
+      <input id="borrowerNotes" placeholder="Notes (optional)">
+      <button>Add Borrower</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h3>Record New Utang</h3>
+    <form id="loanForm">
+      <select id="loanBorrower" required>
+        <option value="">Select borrower</option>
+      </select>
+      <input id="loanAmount" type="number" min="0.01" step="0.01" placeholder="Amount (₱)" required>
+      <label class="muted">Date borrowed<input id="loanDate" type="date" required></label>
+      <label class="muted">Payment term duration
+        <div style="display:flex;gap:7px">
+          <input id="termValue" type="number" min="1" step="1" value="1" required>
+          <select id="termUnit" aria-label="Payment term unit">
+            <option value="days">Days</option>
+            <option value="months" selected>Months</option>
+            <option value="years">Years</option>
+          </select>
+        </div>
+      </label>
+      <label class="muted">Due date (auto-calculated; editable)<input id="loanDue" type="date"></label>
+      <label class="muted">Interest rate (%)
+        <input id="interestRate" type="number" min="0" step="0.01" value="0" placeholder="e.g. 5">
+      </label>
+      <label class="muted">Interest charged per
+        <select id="interestPeriod">
+          <option value="month" selected>Month</option>
+          <option value="day">Day</option>
+          <option value="year">Year</option>
+        </select>
+      </label>
+      <label class="muted" style="display:flex;align-items:center;gap:8px">
+        <input id="interestEnabled" type="checkbox" checked style="width:auto">
+        Charge interest on this loan
+      </label>
+      <input id="loanNotes" placeholder="Notes (optional)">
+      <button>Save Utang</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h3>Cancel or Stop Interest</h3>
+    <p class="muted">Apply an interest decision to an individual loan on a selected effective date.</p>
+    <form id="interestForm">
+      <select id="interestLoan" required>
+        <option value="">Select loan</option>
+      </select>
+      <select id="interestAction" required>
+        <option value="stop">Stop future interest (keep interest already accrued)</option>
+        <option value="waive">Cancel / waive all interest (set interest to ₱0)</option>
+      </select>
+      <label class="muted">Effective date<input id="interestActionDate" type="date" required></label>
+      <input id="interestActionNotes" placeholder="Reason / notes (optional)">
+      <button>Apply Interest Change</button>
+    </form>
+  </section>
+
+
+  <section class="panel">
+    <h3>Bulk Import Borrowers & Utangs (Excel)</h3>
+    <p class="muted">Upload an .xlsx, .xls, or .csv file. Each row can represent a borrower, a loan, or both. Existing borrowers with matching names are reused rather than duplicated.</p>
+    <div class="import-help">
+      <strong>Recommended column headers:</strong><br>
+      <code>borrower_name</code>, <code>phone</code>, <code>borrower_notes</code>, <code>amount</code>, <code>date_borrowed</code>, <code>due_date</code>, <code>term_value</code>, <code>term_unit</code>, <code>interest_enabled</code>, <code>interest_rate</code>, <code>interest_period</code>, <code>loan_notes</code>.<br>
+      <strong>Required:</strong> borrower_name. For an utang row, include amount and date_borrowed. Dates should use YYYY-MM-DD or valid Excel dates. One row per loan; repeat the borrower name for multiple loans.
+    </div>
+    <div class="import-actions">
+      <input id="bulkExcelFile" type="file" accept=".xlsx,.xls,.csv">
+      <button type="button" id="downloadImportTemplate" class="secondary">Download Excel Template</button>
+      <button type="button" id="bulkImportButton">Import File</button>
+    </div>
+    <p id="bulkImportStatus" class="muted" aria-live="polite"></p>
+  </section>
+
+  <section class="panel">
+    <h3>Merge Duplicate Borrowers</h3>
+    <p class="muted">Choose the borrower record to keep and the duplicate record to merge into it. All loans will be reassigned to the kept borrower before the duplicate is deleted. Payments remain attached to their original loans.</p>
+    <div class="merge-grid"><div class="profile-section">
+      <h4>Loan History</h4>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date Borrowed</th><th>Due Date</th><th>Principal</th><th>Interest</th><th>Paid</th><th>Balance</th><th>Interest Terms / Status</th></tr></thead>
+          <tbody id="profileLoanRows"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="profile-section">
+      <h4>Payment Timeline</h4>
+      <div id="profilePaymentTimeline" class="profile-timeline"></div>
+    </div>
+    <div class="profile-section">
+      <h4>Interest Adjustments</h4>
+      <div id="profileInterestAdjustments" class="dash-list"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h3>Loan Records</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Borrower</th><th>Borrowed</th><th>Due</th><th>Principal</th><th>Interest</th><th>Total due</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead>
+        <tbody id="loanRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h3>Interest Adjustment History</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Borrower</th><th>Action</th><th>Effective date</th><th>Notes</th></tr></thead>
+        <tbody id="interestRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  </section>
+
+  <section class="app-page" id="page-borrower-analysis">
+    <div class="dashboard-head">
+      <h3>Borrower Analysis</h3>
+      <span class="muted">Select a borrower to review all utangs, payments, and balances</span>
+    </div>
+    <section class="panel">
+      <div class="borrower-select-panel">
+        <label class="muted">Select borrower
+          <select id="borrowerAnalysisSelect">
+            <option value="">Choose a borrower</option>
+          </select>
+        </label>
+        <button type="button" class="secondary" id="clearBorrowerAnalysis">Clear selection</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3 id="analysisBorrowerTitle">Loan Details — Select a Borrower</h3>
+      <p class="muted">Only the selected borrower’s loans, dates, and notes are shown.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date Borrowed</th><th>Due Date</th><th>Loan Notes</th><th>Principal</th><th>Balance</th></tr></thead>
+          <tbody id="analysisBorrowerLoanRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+      <label class="muted">Keep this borrower<select id="mergeKeep"></select></label>
+      <label class="muted">Merge this duplicate into the kept borrower<select id="mergeDuplicate"></select></label>
+    </div>
+    <button type="button" id="mergeBorrowersButton" class="danger" style="margin-top:10px">Merge Borrowers</button>
+    <p id="mergeStatus" class="muted" aria-live="polite"></p>
+  </section>
+
+  <section class="panel">
+    <h3>Borrower Records</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Borrower</th><th>Contact</th><th>Balance</th><th>Actions</th></tr></thead>
+        <tbody id="borrowerRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+
+  <section class="panel" id="borrowerProfilePanel" style="display:none">
+    <div class="profile-top">
+      <div>
+        <h3 id="profileBorrowerName" style="margin:0 0 4px">Borrower Profile</h3>
+        <span id="profileBorrowerContact" class="muted"></span>
+      </div>
+      <div class="actions">
+        <button type="button" class="danger" id="deleteProfileBorrower">Delete Borrower & All Loans</button>
+        <button type="button" class="secondary" id="closeBorrowerProfile">Close Profile</button>
+      </div>
+    </div>
+    <div class="profile-stats">
+      <div class="profile-stat"><small>Total Principal</small><strong id="profilePrincipal">₱0.00</strong></div>
+      <div class="profile-stat"><small>Interest Accrued</small><strong id="profileInterest">₱0.00</strong></div>
+      <div class="profile-stat"><small>Total Paid</small><strong id="profilePaid">₱0.00</strong></div>
+      <div class="profile-stat"><small>Remaining Balance</small><strong id="profileBalance">₱0.00</strong></div>
+    </div>
+    <div class="profile-section">
+      <h4>Payment Schedule & Unpaid Utangs</h4>
+      <p class="muted">Outstanding loans are listed whether or not a payment has been made. Loans without a due date are shown separately as unpaid / no due date.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Due Date</th><th>Utangs</th><th>Outstanding</th><th>Included Utangs / Breakdown</th></tr></thead>
+          <tbody id="profileScheduleRows"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="profile-section">
+      <h4>Loan History</h4>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Date Borrowed</th><th>Due Date</th><th>Principal</th><th>Interest</th><th>Paid</th><th>Balance</th><th>Interest Terms / Status</th></tr></thead>
+        <tbody id="profileLoanRows"></tbody>
+      </table></div>
+    </div>
+    <div class="profile-section"><h4>Payment Timeline</h4><div id="profilePaymentTimeline" class="profile-timeline"></div></div>
+    <div class="profile-section"><h4>Interest Adjustments</h4><div id="profileInterestAdjustments" class="dash-list"></div></div>
+  </section>
+
+  <section class="app-page" id="page-payments">
+    <div class="dashboard-head"><h3>Payments</h3><span class="muted">Record collections and review payment history</span></div>
+  <section class="panel">
+    <h3>Record Payment</h3>
+    <form id="paymentForm">
+      <select id="paymentLoan" required>
+        <option value="">Select outstanding loan</option>
+      </select>
+      <input id="paymentAmount" type="number" min="0.01" step="0.01" placeholder="Payment amount (₱)" required>
+      <label class="muted">Payment date<input id="paymentDate" type="date" required></label>
+      <input id="paymentNotes" placeholder="Payment notes (optional)">
+      <button>Save Payment</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h3>Payment History</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Borrower</th><th>Payment Date</th><th>Amount</th><th>Notes</th></tr></thead>
+        <tbody id="paymentRows"></tbody>
+      </table>
+    </div>
+  </section>
+  </section>
+
+</main>
+</div>
+
+<script>
+// 1. ADD YOUR SUPABASE PROJECT DETAILS HERE
+const SUPABASE_URL = "https://nneftfppvoxvagjsivtc.supabase.co";
+const SUPABASE_KEY = "sb_publishable_wTIbLSxJtlK21Z802UyiNw_cIptRJkx";
+
+const db = window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let user=null, borrowers=[], loans=[], payments=[], selectedBorrowerProfileId=null;
+
+const $ = id => document.getElementById(id);
+const money = n => Number(n||0).toLocaleString("en-PH",{
+  style:"currency",currency:"PHP"
+});
+const esc = s => String(s??"").replace(/[&<>"']/g,c=>({
+  "&":"&amp;","<":"&lt;",">":"&gt;",
+  '"':"&quot;","'":"&#39;"
+}[c]));
+const today = () => new Date().toLocaleDateString("en-CA");
+
+$("loanDate").value=today();
+$("paymentDate").value=today();
+$("interestActionDate").value=today();
+
+function updateCalculatedDue(){
+  const date=$("loanDate").value, value=Number($("termValue").value);
+  if(!date||!Number.isInteger(value)||value<1)return;
+  const d=new Date(date+"T00:00:00"), unit=$("termUnit").value;
+  if(unit==="days")d.setDate(d.getDate()+value);
+  if(unit==="months")d.setMonth(d.getMonth()+value);
+  if(unit==="years")d.setFullYear(d.getFullYear()+value);
+  $("loanDue").value=d.toLocaleDateString("en-CA");
+}
+["loanDate","termValue","termUnit"].forEach(id=>$(id).addEventListener("change",updateCalculatedDue));
+updateCalculatedDue();
+
+async function run(promise){
+  const {data,error}=await promise;
+  if(error) throw error;
+  return data;
+}
+
+async function login(e){
+  e.preventDefault();
+  $("message").textContent="Signing in...";
+  try{
+    await run(db.auth.signInWithPassword({
+      email:$("email").value,
+      password:$("password").value
+    }));
+    $("message").textContent="";
+  }catch(err){$("message").textContent=err.message;}
+}
+
+async function logout(){
+  await db.auth.signOut();
+}
+
+async function load(){
+  if(!user)return;
+  try{
+    [borrowers,loans,payments]=await Promise.all([
+      run(db.from("borrowers").select("*").order("name")),
+      run(db.from("loans").select("*").order("date_borrowed",{ascending:false})),
+      run(db.from("payments").select("*").order("paid_at",{ascending:false}))
+    ]);
+    render();
+  }catch(err){alert("Could not load records: "+err.message);}
+}
+
+function paidFor(id){
+  return payments.filter(p=>p.loan_id===id)
+    .reduce((s,p)=>s+Number(p.amount),0);
+}
+function daysBetween(start, end){
+  const a=new Date(start+"T00:00:00Z");
+  const b=new Date(end+"T00:00:00Z");
+  return Math.max(0,(b-a)/86400000);
+}
+
+// Simple interest: rate is charged per selected day/month/year.
+// Monthly and yearly rates are prorated using 30 and 365 days respectively.
+// Interest is calculated on original principal (not compounded).
+function interestFor(loan, asOf=today()){
+  if(!loan.interest_enabled || Number(loan.interest_rate||0)<=0) return 0;
+  if(loan.interest_waived_at && loan.interest_waived_at<=asOf) return 0;
+
+  let end=asOf;
+  if(loan.interest_cancelled_at && loan.interest_cancelled_at<end)
+    end=loan.interest_cancelled_at;
+  if(end<loan.date_borrowed) return 0;
+
+  const days=daysBetween(loan.date_borrowed,end);
+  const divisor=loan.interest_period==="day"?1:
+    loan.interest_period==="year"?365:30;
+  const periods=days/divisor;
+  return Math.round(Number(loan.amount)*Number(loan.interest_rate)/100*periods*100)/100;
+}
+function totalDueFor(loan){
+  return Number(loan.amount)+interestFor(loan);
+}
+function balanceFor(loan){
+  return Math.max(0,totalDueFor(loan)-paidFor(loan.id));
+}
+function borrowerName(id){
+  return borrowers.find(b=>b.id===id)?.name||"Unknown";
+}
+
+
+
+
+
+function loanDueDate(loan){
+  if(loan.due_date) return loan.due_date;
+  if(!loan.date_borrowed || !loan.term_value) return "";
+  const d=new Date(loan.date_borrowed+"T00:00:00");
+  const n=Number(loan.term_value);
+  if(loan.term_unit==="days") d.setDate(d.getDate()+n);
+  else if(loan.term_unit==="years") d.setFullYear(d.getFullYear()+n);
+  else d.setMonth(d.getMonth()+n);
+  return d.toLocaleDateString("en-CA");
+}
+function scheduleGroups(sourceLoans){
+  const grouped={};
+  sourceLoans.filter(l=>balanceFor(l)>0.009).forEach(l=>{
+    const due=loanDueDate(l)||"NO-DUE-DATE";
+    if(!grouped[due]) grouped[due]=[];
+    grouped[due].push(l);
+  });
+  return Object.keys(grouped).sort((a,b)=>{
+    if(a==="NO-DUE-DATE") return 1;
+    if(b==="NO-DUE-DATE") return -1;
+    return a.localeCompare(b);
+  }).map(date=>({date,items:grouped[date]}));
+}
+function scheduleGroupRow(group, includeBorrower){
+  const {date,items}=group;
+  const total=items.reduce((sum,l)=>sum+balanceFor(l),0);
+  const borrowerCount=new Set(items.map(l=>l.borrower_id)).size;
+  const details=items.map(l=>{
+    const borrower=includeBorrower?`<strong>${esc(borrowerName(l.borrower_id))}</strong> — `:"";
+    const due=loanDueDate(l);
+    const term=l.term_value?`${l.term_value} ${l.term_unit||"period"}`:"Recorded due date";
+    return `<li>${borrower}Utang dated ${esc(l.date_borrowed||"—")}: <strong>${money(balanceFor(l))} unpaid</strong> <span class="muted">(principal ${money(l.amount)}, interest ${money(interestFor(l))}, paid ${money(paidFor(l.id))}; ${esc(term)})</span></li>`;
+  }).join("");
+  const label=date==="NO-DUE-DATE"?"No due date set":date;
+  const status=date==="NO-DUE-DATE"?' <span class="status overdue">Unpaid · No due date</span>':date<today()?' <span class="status overdue">Overdue</span>':date===today()?' <span class="status">Due today</span>':' <span class="status">Upcoming</span>';
+  const countCells=includeBorrower?`<td>${items.length}</td><td>${borrowerCount}</td>`:`<td>${items.length}</td>`;
+  return `<tr><td>${esc(label)}${status}</td>${countCells}<td class="schedule-total">${money(total)}</td><td><details><summary>View ${items.length} utang${items.length===1?"":"s"}</summary><ul class="schedule-breakdown">${details}</ul></details></td></tr>`;
+}
+function renderPaymentSchedule(){
+  const body=$("paymentScheduleRows");
+  if(!body)return;
+  const groups=scheduleGroups(loans);
+  body.innerHTML=groups.length?groups.map(g=>scheduleGroupRow(g,true)).join(""):
+    '<tr><td colspan="5">No outstanding or unpaid loans.</td></tr>';
+}
+function renderBorrowerPaymentSchedule(borrowerLoans){
+  const body=$("profileScheduleRows");
+  if(!body)return;
+  const groups=scheduleGroups(borrowerLoans);
+  body.innerHTML=groups.length?groups.map(g=>scheduleGroupRow(g,false)).join(""):
+    '<tr><td colspan="4">No unpaid loans for this borrower.</td></tr>';
+}
+
+async function deleteBorrower(id){
+  const borrower=borrowers.find(b=>b.id===id);
+  if(!borrower)return alert("Borrower not found. Refresh and try again.");
+  const borrowerLoans=loans.filter(l=>l.borrower_id===id);
+  const loanIds=borrowerLoans.map(l=>l.id);
+  const paymentCount=payments.filter(p=>loanIds.includes(p.loan_id)).length;
+  const message=`Permanently delete "${borrower.name}" and all related records?\\n\\nThis will delete ${borrowerLoans.length} loan(s) and ${paymentCount} payment(s), including their history. This cannot be undone.`;
+  if(!confirm(message))return;
+  try{
+    if(loanIds.length){
+      await run(db.from("payments").delete().in("loan_id",loanIds).eq("user_id",user.id));
+      await run(db.from("loans").delete().eq("borrower_id",id).eq("user_id",user.id));
+    }
+    await run(db.from("borrowers").delete().eq("id",id).eq("user_id",user.id));
+    if(selectedBorrowerProfileId===id)selectedBorrowerProfileId=null;
+    await load();
+    alert(`"${borrower.name}" and all related loans and payments were deleted.`);
+  }catch(err){
+    alert("Could not fully delete this borrower: "+err.message+"\\nCheck database permissions and related-record deletion rules.");
+    await load();
+  }
+}
+
+function openBorrowerProfile(id){
+  selectedBorrowerProfileId=id;
+  const picker=$("borrowerAnalysisSelect");
+  if(picker) picker.value=id;
+  showPage("borrower-analysis");
+  renderBorrowerProfile();
+  const panel=$("borrowerProfilePanel");
+  if(panel) panel.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+function renderBorrowerProfile(){
+  const panel=$("borrowerProfilePanel");
+  const borrower=borrowers.find(b=>b.id===selectedBorrowerProfileId);
+  if(!borrower){panel.style.display="none";return;}
+  panel.style.display="block";
+  const borrowerLoans=loans.filter(l=>l.borrower_id===borrower.id);
+  const loanIds=borrowerLoans.map(l=>l.id);
+  const borrowerPayments=payments.filter(p=>loanIds.includes(p.loan_id))
+    .sort((a,b)=>String(b.paid_at).localeCompare(String(a.paid_at)));
+  const principal=borrowerLoans.reduce((s,l)=>s+Number(l.amount||0),0);
+  const interest=borrowerLoans.reduce((s,l)=>s+interestFor(l),0);
+  const paid=borrowerPayments.reduce((s,p)=>s+Number(p.amount||0),0);
+  const balance=borrowerLoans.reduce((s,l)=>s+balanceFor(l),0);
+
+  $("profileBorrowerName").textContent=borrower.name;
+  $("profileBorrowerContact").textContent=[borrower.phone,borrower.notes].filter(Boolean).join(" • ")||"No contact details";
+  $("profilePrincipal").textContent=money(principal);
+  $("profileInterest").textContent=money(interest);
+  $("profilePaid").textContent=money(paid);
+  $("profileBalance").textContent=money(balance);
+  renderBorrowerPaymentSchedule(borrowerLoans);
+
+  $("profileLoanRows").innerHTML=borrowerLoans.map(l=>{
+    const status=balanceFor(l)<=0?"Paid":l.due_date&&l.due_date<today()?"Overdue":"Active";
+    const term=l.term_value?`${l.term_value} ${l.term_unit||"period"}`:"Custom due date";
+    const interestTerm=l.interest_enabled
+      ? `${Number(l.interest_rate||0)}% / ${l.interest_period||"month"} · ${term}`
+      : `No interest · ${term}`;
+    const adjustment=l.interest_waived_at?` · Waived ${l.interest_waived_at}`:
+      l.interest_cancelled_at?` · Stopped ${l.interest_cancelled_at}`:"";
+    return `<tr>
+      <td>${esc(l.date_borrowed)}</td><td>${esc(l.due_date||"—")}</td>
+      <td>${money(l.amount)}</td><td>${money(interestFor(l))}</td>
+      <td>${money(paidFor(l.id))}</td><td>${money(balanceFor(l))}</td>
+      <td>${esc(interestTerm+adjustment)}<br><span class="muted">${status}</span></td>
+    </tr>`;
+  }).join("")||'<tr><td colspan="7">No loans recorded for this borrower.</td></tr>';
+
+  $("profilePaymentTimeline").innerHTML=borrowerPayments.length?borrowerPayments.map(payment=>{
+    const loan=borrowerLoans.find(l=>l.id===payment.loan_id);
+    return `<div class="timeline-item">
+      <span class="timeline-date">${esc(payment.paid_at||"")}</span>
+      <span><strong>Payment received</strong><br><small class="muted">${esc(loan?"Loan borrowed "+loan.date_borrowed:"Loan record")}${payment.notes?" · "+esc(payment.notes):""}</small></span>
+      <span class="timeline-amount">${money(payment.amount)}</span>
+    </div>`;
+  }).join(""):'<div class="profile-empty">No payments recorded for this borrower yet.</div>';
+
+  const adjustments=borrowerLoans.filter(l=>l.interest_cancelled_at||l.interest_waived_at);
+  $("profileInterestAdjustments").innerHTML=adjustments.length?adjustments.map(l=>`
+    <div class="dash-list-item">
+      <span><strong>${esc(l.interest_waived_at?"All interest waived":"Future interest stopped")}</strong><br><small class="muted">${esc(l.interest_waived_at||l.interest_cancelled_at)} · Loan ${esc(l.date_borrowed)}</small>
+      ${l.interest_action_notes?`<br><small class="muted">${esc(l.interest_action_notes)}</small>`:""}</span>
+    </div>`).join(""):'<div class="dash-empty">No interest adjustments for this borrower.</div>';
+}
+
+function svgLineChart(points, label, formatter=money){
+  const W=520,H=220,L=54,R=18,T=18,B=38,innerW=W-L-R,innerH=H-T-B;
+  if(!points.length)return '<div class="chart-empty">No payment data available yet.</div>';
+  const max=Math.max(1,...points.map(p=>p.value));
+  const niceMax=max*1.12;
+  const coords=points.map((p,i)=>({
+    ...p,x:L+(points.length===1?innerW/2:i*innerW/(points.length-1)),
+    y:T+innerH-(p.value/niceMax)*innerH
+  }));
+  const grid=[0,.25,.5,.75,1].map(f=>{
+    const y=T+innerH-innerH*f, val=niceMax*f;
+    return `<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="#e8eee9" stroke-width="1"/>
+      <text x="${L-8}" y="${y+4}" text-anchor="end" font-size="10" fill="#718078">${esc(formatter(val))}</text>`;
+  }).join("");
+  const path=coords.map((p,i)=>(i?"L":"M")+p.x+","+p.y).join(" ");
+  const dots=coords.map(p=>`<circle cx="${p.x}" cy="${p.y}" r="4" fill="#19845c"><title>${esc(p.label)}: ${esc(formatter(p.value))}</title></circle>`).join("");
+  const xlabels=coords.map(p=>`<text x="${p.x}" y="${H-12}" text-anchor="middle" font-size="10" fill="#718078">${esc(p.label)}</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">
+    ${grid}<path d="${path}" fill="none" stroke="#19845c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    ${dots}${xlabels}</svg>`;
+}
+
+function svgBarChart(items){
+  if(!items.length)return '<div class="chart-empty">No borrower balances to display.</div>';
+  const W=520,rowH=42,H=Math.max(100,items.length*rowH+18),labelW=150,valueW=82,barW=W-labelW-valueW-28;
+  const max=Math.max(1,...items.map(x=>x.value));
+  const rows=items.map((item,i)=>{
+    const y=14+i*rowH, width=Math.max(item.value>0?2:0,item.value/max*barW);
+    return `<text x="${labelW-10}" y="${y+17}" text-anchor="end" font-size="11" fill="#40564b">${esc(item.label)}</text>
+      <rect x="${labelW}" y="${y+5}" width="${barW}" height="17" rx="7" fill="#edf3ef"/>
+      <rect x="${labelW}" y="${y+5}" width="${width}" height="17" rx="7" fill="#19845c"><title>${esc(money(item.value))}</title></rect>
+      <text x="${labelW+barW+9}" y="${y+18}" font-size="11" fill="#40564b">${esc(money(item.value))}</text>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Outstanding balance by borrower">${rows}</svg>`;
+}
+
+function monthlyPaymentSeries(paymentList, months){
+  return months.map(m=>({
+    label:m.label,
+    value:paymentList.filter(p=>String(p.paid_at||"").slice(0,7)===m.key)
+      .reduce((s,p)=>s+Number(p.amount||0),0)
+  }));
+}
+
+function renderDashboard(){
+  const principal=loans.reduce((s,l)=>s+Number(l.amount||0),0);
+  const interest=loans.reduce((s,l)=>s+interestFor(l),0);
+  const outstanding=loans.reduce((s,l)=>s+balanceFor(l),0);
+  const collected=payments.reduce((s,p)=>s+Number(p.amount||0),0);
+  const overdue=loans.filter(l=>balanceFor(l)>0&&l.due_date&&l.due_date<today());
+  const active=loans.filter(l=>balanceFor(l)>0);
+  const paid=loans.filter(l=>balanceFor(l)<=0);
+  const now=new Date(today()+"T00:00:00");
+  const soon=loans.filter(l=>{
+    if(balanceFor(l)<=0||!l.due_date)return false;
+    const d=new Date(l.due_date+"T00:00:00");
+    const diff=(d-now)/86400000;
+    return diff>=0&&diff<=7;
+  });
+
+  $("dashPrincipal").textContent=money(principal);
+  $("dashOutstanding").textContent=money(outstanding);
+  $("dashOverdue").textContent=overdue.length;
+  $("dashOverdueAmount").textContent=money(overdue.reduce((s,l)=>s+balanceFor(l),0))+" overdue balance";
+  $("dashInterest").textContent=money(interest);
+  $("dashCollected").textContent=money(collected);
+  $("dashActive").textContent=active.length;
+  $("dashPaid").textContent=paid.length;
+  $("dashUpcoming").textContent=soon.length;
+  $("dashUpcomingAmount").textContent=money(soon.reduce((s,l)=>s+balanceFor(l),0))+" due soon";
+  $("dashboardUpdated").textContent="Updated "+new Date().toLocaleString("en-PH");
+
+  const dashboardLoanRows=borrowers.map(b=>{
+    const borrowerLoans=loans.filter(l=>l.borrower_id===b.id);
+    const rows=borrowerLoans.map((l,i)=>`<tr>
+      ${i===0?`<td rowspan="${borrowerLoans.length+1}" class="pivot-borrower"><button type="button" class="borrower-name-link" data-dashboard-borrower="${esc(b.id)}">${esc(b.name)}</button></td>`:""}
+      <td class="loan-notes-cell">${esc(l.notes||"—")}</td>
+      <td>${esc(l.date_borrowed||"—")}</td>
+      <td>${esc(loanDueDate(l)||"—")}</td>
+      <td class="numeric">${money(l.amount)}</td>
+    </tr>`).join("");
+    const total=borrowerLoans.reduce((sum,l)=>sum+Number(l.amount||0),0);
+    return rows+`<tr class="pivot-subtotal"><td colspan="3"><strong>${esc(b.name)} Total</strong></td><td class="numeric"><strong>${money(total)}</strong></td></tr>`;
+  }).join("");
+  const grandTotal=loans.reduce((sum,l)=>sum+Number(l.amount||0),0);
+  $("dashboardBorrowerLoanRows").innerHTML=dashboardLoanRows+
+    `<tr class="pivot-grand-total"><td colspan="4"><strong>Grand Total</strong></td><td class="numeric"><strong>${money(grandTotal)}</strong></td></tr>`;
+
+  const monthLabels=[];
+  for(let i=5;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    monthLabels.push({key:d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"),
+      label:d.toLocaleDateString("en-PH",{month:"short"})});
+  }
+  const monthly=monthLabels.map(m=>({
+    ...m,total:payments.filter(p=>String(p.paid_at||"").slice(0,7)===m.key)
+      .reduce((s,p)=>s+Number(p.amount||0),0)
+  }));
+  const maxMonth=Math.max(1,...monthly.map(m=>m.total));
+  $("monthlyCollections").innerHTML=monthly.map(m=>{
+    const height=m.total?Math.max(4,m.total/maxMonth*100):3;
+    return `<div class="month-col">
+      <b>${m.total?money(m.total):"—"}</b>
+      <div class="month-bar-wrap"><div class="month-bar" style="height:${height}%"></div></div>
+      <small>${esc(m.label)}</small>
+    </div>`;
+  }).join("");
+
+  const portfolio=[
+    {label:"Active",count:active.length,cls:""},
+    {label:"Overdue",count:overdue.length,cls:"red"},
+    {label:"Paid",count:paid.length,cls:"alt"}
+  ];
+  const maxCount=Math.max(1,...portfolio.map(x=>x.count));
+  $("portfolioBars").innerHTML=portfolio.map(x=>`
+    <div class="bar-row">
+      <span>${x.label}</span>
+      <div class="bar-track"><div class="bar-fill ${x.cls}" style="width:${x.count/maxCount*100}%"></div></div>
+      <strong>${x.count}</strong>
+    </div>`).join("")+
+    `<div class="dash-list-item"><span>Total loan records</span><strong>${loans.length}</strong></div>`;
+
+  $("overduePreview").innerHTML=overdue.length?overdue
+    .sort((a,b)=>a.due_date.localeCompare(b.due_date)).slice(0,5).map(l=>`
+      <div class="dash-list-item">
+        <span><strong>${esc(borrowerName(l.borrower_id))}</strong><br><small class="muted">Due ${esc(l.due_date)}</small></span>
+        <strong>${money(balanceFor(l))}</strong>
+      </div>`).join(""):'<div class="dash-empty">No overdue loans. Great work!</div>';
+
+  $("recentPayments").innerHTML=payments.length?payments.slice(0,5).map(p=>{
+    const loan=loans.find(l=>l.id===p.loan_id);
+    return `<div class="dash-list-item">
+      <span><strong>${esc(loan?borrowerName(loan.borrower_id):"Unknown borrower")}</strong><br><small class="muted">${esc(p.paid_at||"")}</small></span>
+      <strong>${money(p.amount)}</strong>
+    </div>`;
+  }).join(""):'<div class="dash-empty">No payments recorded yet.</div>';
+
+  // Borrower-level balances, ranked from highest to lowest.
+  const borrowerBalances=borrowers.map(b=>({
+    label:b.name,
+    value:loans.filter(l=>l.borrower_id===b.id).reduce((s,l)=>s+balanceFor(l),0)
+  })).filter(x=>x.value>0).sort((a,b)=>b.value-a.value).slice(0,10);
+  $("borrowerBalanceChart").innerHTML=svgBarChart(borrowerBalances);
+
+  // Payment trend across the latest 12 calendar months.
+  const trendMonths=[];
+  for(let i=11;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    trendMonths.push({key:d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"),
+      label:d.toLocaleDateString("en-PH",{month:"short"})+" '"+String(d.getFullYear()).slice(-2)});
+  }
+  $("paymentTrendChart").innerHTML=svgLineChart(
+    monthlyPaymentSeries(payments,trendMonths),"Monthly payment history");
+
+  // Keep borrower selection stable across refreshes where possible.
+  const borrowerSelect=$("borrowerChartSelect");
+  const selectedBorrower=borrowerSelect.value;
+  borrowerSelect.innerHTML='<option value="">Select borrower</option>'+
+    borrowers.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join("");
+  if(borrowers.some(b=>b.id===selectedBorrower)) borrowerSelect.value=selectedBorrower;
+  else if(borrowers.length===1) borrowerSelect.value=borrowers[0].id;
+
+  const selectedId=borrowerSelect.value;
+  if(selectedId){
+    const borrowerLoanIds=loans.filter(l=>l.borrower_id===selectedId).map(l=>l.id);
+    const borrowerPayments=payments.filter(p=>borrowerLoanIds.includes(p.loan_id));
+    $("borrowerPaymentChart").innerHTML=svgLineChart(
+      monthlyPaymentSeries(borrowerPayments,trendMonths),
+      "Selected borrower monthly payments");
+  }else{
+    $("borrowerPaymentChart").innerHTML='<div class="chart-empty">Choose a borrower to view their payment history.</div>';
+  }
+
+  const composition=[
+    {label:"Principal lent",value:principal},
+    {label:"Interest accrued",value:interest},
+    {label:"Payments collected",value:collected}
+  ];
+  const compMax=Math.max(1,...composition.map(x=>x.value));
+  $("loanCompositionChart").innerHTML='<div class="bar-list">'+composition.map(x=>`
+    <div class="bar-row">
+      <span>${x.label}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${x.value/compMax*100}%"></div></div>
+      <strong>${money(x.value)}</strong>
+    </div>`).join("")+'</div>';
+}
+
+function render(){
+  const outstanding=loans.reduce((s,l)=>s+balanceFor(l),0);
+  const collected=payments.reduce((s,p)=>s+Number(p.amount),0);
+
+  renderDashboard();
+  renderBorrowerProfile();
+  renderPaymentSchedule();
+  const analysisSelect=$("borrowerAnalysisSelect");
+  if(analysisSelect){
+    const current=selectedBorrowerProfileId||analysisSelect.value;
+    analysisSelect.innerHTML='<option value="">Choose a borrower</option>'+
+      borrowers.map(b=>`<option value="${b.id}">${esc(b.name)}${b.phone?" · "+esc(b.phone):""}</option>`).join("");
+    analysisSelect.value=borrowers.some(b=>b.id===current)?current:"";
+  }
+  $("balance").textContent=money(outstanding);
+  $("collected").textContent=money(collected);
+  $("borrowerCount").textContent=borrowers.length;
+
+  $("loanBorrower").innerHTML='<option value="">Select borrower</option>'+
+    borrowers.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join("");
+  const mergeOptions='<option value="">Select borrower</option>'+
+    borrowers.map(b=>`<option value="${b.id}">${esc(b.name)}${b.phone?" · "+esc(b.phone):""}</option>`).join("");
+  $("mergeKeep").innerHTML=mergeOptions;
+  $("mergeDuplicate").innerHTML=mergeOptions;
+
+  $("paymentLoan").innerHTML='<option value="">Select outstanding loan</option>'+
+    loans.filter(l=>balanceFor(l)>0).map(l=>
+      `<option value="${l.id}">${esc(borrowerName(l.borrower_id))} — ${money(balanceFor(l))}</option>`
+    ).join("");
+
+  $("interestLoan").innerHTML='<option value="">Select loan</option>'+
+    loans.filter(l=>l.interest_enabled && !l.interest_cancelled_at && !l.interest_waived_at)
+      .map(l=>`<option value="${l.id}">${esc(borrowerName(l.borrower_id))} — ${money(balanceFor(l))}</option>`)
+      .join("");
+
+  $("borrowerRows").innerHTML=borrowers.map(b=>{
+    const bal=loans.filter(l=>l.borrower_id===b.id)
+      .reduce((s,l)=>s+balanceFor(l),0);
+    return `<tr><td><button type="button" class="borrower-name-link" data-profile-borrower="${esc(b.id)}">${esc(b.name)}</button></td><td>${esc(b.phone)}</td><td>${money(bal)}</td><td><button type="button" class="danger" data-delete-borrower="${esc(b.id)}">Delete</button></td></tr>`;
+  }).join("")||'<tr><td colspan="4">No borrowers yet.</td></tr>';
+
+  const analysisBorrower=borrowers.find(b=>b.id===selectedBorrowerProfileId);
+  const analysisLoans=analysisBorrower?loans.filter(l=>l.borrower_id===analysisBorrower.id):[];
+  const analysisRows=analysisBorrower?analysisLoans.map(l=>`<tr>
+      <td>${esc(l.date_borrowed||"—")}</td>
+      <td>${esc(loanDueDate(l)||"—")}</td>
+      <td class="loan-notes-cell">${esc(l.notes||"—")}</td>
+      <td>${money(l.amount)}</td>
+      <td>${money(balanceFor(l))}</td>
+    </tr>`).join(""):'';
+  $("analysisBorrowerLoanRows").innerHTML=analysisBorrower?
+    (analysisRows||'<tr><td colspan="5">No loans recorded for this borrower.</td></tr>'):
+    '<tr><td colspan="5" class="muted">Select a borrower from the dashboard summary or the borrower selector above.</td></tr>';
+  const analysisTitle=$("analysisBorrowerTitle");
+  if(analysisTitle) analysisTitle.textContent=analysisBorrower?`Loan Details — ${analysisBorrower.name}`:"Loan Details — Select a Borrower";
+
+  $("loanRows").innerHTML=loans.map(l=>{
+    const bal=balanceFor(l), interest=interestFor(l), total=totalDueFor(l);
+    const status=bal===0?"Paid":
+      l.due_date&&l.due_date<today()?"Overdue":"Unpaid";
+    const cls=status==="Paid"?"paid":status==="Overdue"?"overdue":"status";
+    return `<tr>
+      <td>${esc(borrowerName(l.borrower_id))}</td>
+      <td>${esc(l.date_borrowed)}</td>
+      <td>${esc(l.due_date||"—")}</td>
+      <td>${money(l.amount)}</td>
+      <td>${money(interest)}</td>
+      <td>${money(total)}</td>
+      <td>${money(paidFor(l.id))}</td>
+      <td>${money(bal)}</td>
+      <td><span class="status ${cls}">${status}</span></td>
+    </tr>`;
+  }).join("")||'<tr><td colspan="9">No loans recorded.</td></tr>';
+
+  $("interestRows").innerHTML=loans
+    .filter(l=>l.interest_cancelled_at||l.interest_waived_at)
+    .map(l=>`<tr>
+      <td>${esc(borrowerName(l.borrower_id))}</td>
+      <td>${l.interest_waived_at?"All interest waived":"Future interest stopped"}</td>
+      <td>${esc(l.interest_waived_at||l.interest_cancelled_at)}</td>
+      <td>${esc(l.interest_action_notes||"")}</td>
+    </tr>`).join("")||'<tr><td colspan="4">No interest changes recorded.</td></tr>';
+
+  $("paymentRows").innerHTML=payments.map(p=>{
+    const loan=loans.find(l=>l.id===p.loan_id);
+    return `<tr>
+      <td>${esc(loan?borrowerName(loan.borrower_id):"Unknown")}</td>
+      <td>${esc(p.paid_at)}</td>
+      <td>${money(p.amount)}</td>
+      <td>${esc(p.notes)}</td>
+    </tr>`;
+  }).join("")||'<tr><td colspan="4">No payments yet.</td></tr>';
+}
+
+$("borrowerRows").addEventListener("click",e=>{
+  const deleteButton=e.target.closest("[data-delete-borrower]");
+  if(deleteButton){deleteBorrower(deleteButton.getAttribute("data-delete-borrower"));return;}
+  const button=e.target.closest("[data-profile-borrower]");
+  if(button)openBorrowerProfile(button.getAttribute("data-profile-borrower"));
+});
+$("dashboardBorrowerLoanRows").addEventListener("click",e=>{
+  const button=e.target.closest("[data-dashboard-borrower]");
+  if(!button)return;
+  const id=button.getAttribute("data-dashboard-borrower");
+  selectedBorrowerProfileId=id;
+  $("borrowerAnalysisSelect").value=id;
+  showPage("borrower-analysis");
+  render();
+});
+$("analysisBorrowerLoanRows").addEventListener("click",e=>{
+  const button=e.target.closest("[data-profile-borrower]");
+  if(button)openBorrowerProfile(button.getAttribute("data-profile-borrower"));
+});
+$("deleteProfileBorrower").addEventListener("click",()=>{
+  if(selectedBorrowerProfileId)deleteBorrower(selectedBorrowerProfileId);
+});
+$("closeBorrowerProfile").addEventListener("click",()=>{
+  selectedBorrowerProfileId=null;
+  $("borrowerProfilePanel").style.display="none";
+});
+
+$("borrowerChartSelect").addEventListener("change",()=>{
+  const selectedId=$("borrowerChartSelect").value;
+  if(!selectedId){
+    $("borrowerPaymentChart").innerHTML='<div class="chart-empty">Choose a borrower to view their payment history.</div>';
+    return;
+  }
+  const now=new Date(today()+"T00:00:00"), months=[];
+  for(let i=11;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    months.push({key:d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"),
+      label:d.toLocaleDateString("en-PH",{month:"short"})+" '"+String(d.getFullYear()).slice(-2)});
+  }
+  const loanIds=loans.filter(l=>l.borrower_id===selectedId).map(l=>l.id);
+  const borrowerPayments=payments.filter(p=>loanIds.includes(p.loan_id));
+  $("borrowerPaymentChart").innerHTML=svgLineChart(
+    monthlyPaymentSeries(borrowerPayments,months),"Selected borrower monthly payments");
+});
+
+$("downloadImportTemplate").addEventListener("click",downloadExcelTemplate);
+$("bulkImportButton").addEventListener("click",bulkImport);
+$("mergeBorrowersButton").addEventListener("click",mergeBorrowers);
+
+
+function showPage(page){
+  const valid=["dashboard","utangs","borrower-analysis","payments"].includes(page)?page:"dashboard";
+  document.querySelectorAll(".app-page").forEach(el=>el.classList.toggle("active",el.id==="page-"+valid));
+  document.querySelectorAll(".nav-tab").forEach(btn=>btn.classList.toggle("active",btn.dataset.page===valid));
+  if(valid!=="borrower-analysis"){
+    // Keep borrower profile visible only while working in the borrower/utang section.
+    const profile=$("borrowerProfilePanel");
+    if(profile) profile.style.display="none";
+  }else if(selectedBorrowerProfileId){
+    renderBorrowerProfile();
+  }
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+document.querySelectorAll(".nav-tab").forEach(btn=>btn.addEventListener("click",()=>showPage(btn.dataset.page)));
+$("borrowerAnalysisSelect").addEventListener("change",e=>{
+  selectedBorrowerProfileId=e.target.value||null;
+  renderBorrowerProfile();
+});
+$("clearBorrowerAnalysis").addEventListener("click",()=>{
+  selectedBorrowerProfileId=null;
+  $("borrowerAnalysisSelect").value="";
+  renderBorrowerProfile();
+});
+showPage("dashboard");
+
+$("loginForm").addEventListener("submit",login);
+
+$("borrowerForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  try{
+    await run(db.from("borrowers").insert({
+      user_id:user.id,
+      name:$("borrowerName").value.trim(),
+      phone:$("borrowerPhone").value.trim(),
+      notes:$("borrowerNotes").value.trim()
+    }));
+    e.target.reset();
+    await load();
+    alert("Borrower added!");
+  }catch(err){alert(err.message);}
+});
+
+$("loanForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const amount=Number($("loanAmount").value);
+  const date=$("loanDate").value;
+  const due=$("loanDue").value;
+  const termValue=Number($("termValue").value);
+  const termUnit=$("termUnit").value;
+  const rate=Number($("interestRate").value||0);
+  if(amount<=0)return alert("Enter a valid amount.");
+  if(!Number.isInteger(termValue)||termValue<1)return alert("Enter a valid payment term.");
+  if(rate<0)return alert("Interest rate cannot be negative.");
+  if(due&&due<date)return alert("Due date cannot be before borrowing date.");
+  const calculatedDue=new Date(date+"T00:00:00");
+  if(termUnit==="days") calculatedDue.setDate(calculatedDue.getDate()+termValue);
+  if(termUnit==="months") calculatedDue.setMonth(calculatedDue.getMonth()+termValue);
+  if(termUnit==="years") calculatedDue.setFullYear(calculatedDue.getFullYear()+termValue);
+  const finalDue=due||calculatedDue.toLocaleDateString("en-CA");
+  try{
+    await run(db.from("loans").insert({
+      user_id:user.id,
+      borrower_id:$("loanBorrower").value,
+      amount,date_borrowed:date,
+      due_date:finalDue,
+      term_value:termValue,
+      term_unit:termUnit,
+      interest_enabled:$("interestEnabled").checked,
+      interest_rate:rate,
+      interest_period:$("interestPeriod").value,
+      interest_cancelled_at:null,
+      interest_waived_at:null,
+      interest_action_notes:null,
+      notes:$("loanNotes").value.trim()
+    }));
+    e.target.reset();
+    $("loanDate").value=today();
+    await load();
+    alert("Utang recorded!");
+  }catch(err){alert(err.message);}
+});
+
+$("interestForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const id=$("interestLoan").value;
+  const action=$("interestAction").value;
+  const effectiveDate=$("interestActionDate").value;
+  const loan=loans.find(l=>l.id===id);
+  if(!loan||!effectiveDate)return alert("Select a loan and effective date.");
+  if(effectiveDate<loan.date_borrowed)return alert("Effective date cannot be before the borrowing date.");
+  const updates=action==="waive"
+    ? {interest_waived_at:effectiveDate,interest_cancelled_at:effectiveDate}
+    : {interest_cancelled_at:effectiveDate};
+  updates.interest_action_notes=$("interestActionNotes").value.trim();
+  try{
+    await run(db.from("loans").update(updates).eq("id",id).eq("user_id",user.id));
+    e.target.reset();
+    $("interestActionDate").value=today();
+    await load();
+    alert(action==="waive"?"All interest waived for this loan.":"Future interest stopped; interest accrued up to the effective date remains.");
+  }catch(err){alert("Could not update interest. Make sure the database migration has been run. "+err.message);}
+});
+
+$("paymentForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const id=$("paymentLoan").value;
+  const amount=Number($("paymentAmount").value);
+  const loan=loans.find(l=>l.id===id);
+  if(!loan||amount<=0)return alert("Enter a valid payment.");
+  if(amount>balanceFor(loan)+0.001)
+    return alert("Payment exceeds remaining balance.");
+  try{
+    await run(db.from("payments").insert({
+      user_id:user.id,loan_id:id,
+      amount,paid_at:$("paymentDate").value,
+      notes:$("paymentNotes").value.trim()
+    }));
+    e.target.reset();
+    $("paymentDate").value=today();
+    await load();
+    alert("Payment recorded!");
+  }catch(err){alert(err.message);}
+});
+
+
+function normalizeBorrowerName(name){
+  return String(name||"").trim().toLocaleLowerCase().replace(/\s+/g," ");
+}
+function excelDate(value){
+  if(value instanceof Date && !isNaN(value)) return value.toISOString().slice(0,10);
+  if(typeof value==="number" && value>0){
+    const d=XLSX.SSF.parse_date_code(value);
+    if(d)return `${d.y}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}`;
+  }
+  const raw=String(value??"").trim();
+  if(!raw)return "";
+  if(/^\d{4}-\d{1,2}-\d{1,2}$/.test(raw)){
+    const [y,m,d]=raw.split("-");return `${y}-${m.padStart(2,"0")}-${d.padStart(2,"0")}`;
+  }
+  const parsed=new Date(raw);
+  if(!isNaN(parsed))return parsed.toISOString().slice(0,10);
+  return raw;
+}
+function downloadExcelTemplate(){
+  const headers=["borrower_name","phone","borrower_notes","amount","date_borrowed","due_date","term_value","term_unit","interest_enabled","interest_rate","interest_period","loan_notes"];
+  const examples=[
+    ["Juan Dela Cruz","09171234567","Sample borrower",5000,"2026-01-15","2026-02-15",1,"months",true,5,"month","First loan"],
+    ["Juan Dela Cruz","09171234567","",2500,"2026-03-01","2026-04-01",1,"months",false,0,"month","Second loan"],
+    ["Maria Santos","09981234567","Borrower only","","","","","","","","",""]
+  ];
+  const ws=XLSX.utils.aoa_to_sheet([headers,...examples]);
+  ws["!cols"]=headers.map(()=>({wch:18}));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Import");
+  XLSX.writeFile(wb,"utang-tracker-bulk-import-template.xlsx");
+}
+function parseBulkRows(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{
+        const data=new Uint8Array(ev.target.result);
+        const wb=XLSX.read(data,{type:"array",cellDates:true});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:"",raw:true});
+        resolve(rows);
+      }catch(err){reject(err);}
+    };
+    reader.onerror=()=>reject(new Error("Could not read the selected file."));
+    reader.readAsArrayBuffer(file);
+  });
+}
+async function bulkImport(){
+  const file=$("bulkExcelFile").files[0];
+  if(!file)return alert("Choose an Excel or CSV file first.");
+  $("bulkImportButton").disabled=true;
+  $("bulkImportStatus").textContent="Reading and validating file...";
+  try{
+    const rows=await parseBulkRows(file);
+    if(!rows.length)throw new Error("The first worksheet has no data rows.");
+    const normalized=rows.map((r,index)=>{
+      const row={};
+      Object.keys(r).forEach(k=>row[String(k).trim().toLowerCase()]=r[k]);
+      const name=String(row.borrower_name||row.name||"").trim();
+      const amountRaw=row.amount;
+      const amount=amountRaw===""||amountRaw===null?null:Number(amountRaw);
+      const date=excelDate(row.date_borrowed||row.borrowed_date);
+      const due=excelDate(row.due_date);
+      const hasLoan=amountRaw!==""&&amountRaw!==null&&amountRaw!==undefined;
+      if(!name)throw new Error(`Row ${index+2}: borrower_name is required.`);
+      if(hasLoan && (!Number.isFinite(amount)||amount<=0))throw new Error(`Row ${index+2}: amount must be greater than zero.`);
+      if(hasLoan && !date)throw new Error(`Row ${index+2}: date_borrowed is required for a loan.`);
+      if(hasLoan && due && due<date)throw new Error(`Row ${index+2}: due_date cannot be before date_borrowed.`);
+      const termValue=row.term_value===""||row.term_value===undefined?1:Number(row.term_value);
+      if(hasLoan && (!Number.isInteger(termValue)||termValue<1))throw new Error(`Row ${index+2}: term_value must be a positive whole number.`);
+      const rate=row.interest_rate===""||row.interest_rate===undefined?0:Number(row.interest_rate);
+      if(hasLoan && (!Number.isFinite(rate)||rate<0))throw new Error(`Row ${index+2}: interest_rate must be zero or more.`);
+      const unit=String(row.term_unit||"months").toLowerCase();
+      const period=String(row.interest_period||"month").toLowerCase();
+      if(hasLoan && !["days","months","years"].includes(unit))throw new Error(`Row ${index+2}: term_unit must be days, months, or years.`);
+      if(hasLoan && !["day","month","year"].includes(period))throw new Error(`Row ${index+2}: interest_period must be day, month, or year.`);
+      return {rowIndex:index+2,name,phone:String(row.phone||"").trim(),
+        borrowerNotes:String(row.borrower_notes||row.notes||"").trim(),
+        hasLoan,amount,date,due,termValue,unit,rate,
+        interestEnabled:row.interest_enabled===true||String(row.interest_enabled).toLowerCase()==="true"||String(row.interest_enabled)==="1",
+        period,loanNotes:String(row.loan_notes||"").trim()};
+    });
+    const borrowerMap=new Map(borrowers.map(b=>[normalizeBorrowerName(b.name),b]));
+    const newBorrowers=[];
+    normalized.forEach(r=>{
+      const key=normalizeBorrowerName(r.name);
+      if(!borrowerMap.has(key)){
+        const record={user_id:user.id,name:r.name,phone:r.phone,notes:r.borrowerNotes};
+        newBorrowers.push(record);
+        borrowerMap.set(key,{__pending:true,...record});
+      }else if(borrowerMap.get(key).__pending){
+        const pending=borrowerMap.get(key);
+        if(!pending.phone&&r.phone)pending.phone=r.phone;
+        if(!pending.notes&&r.borrowerNotes)pending.notes=r.borrowerNotes;
+      }
+    });
+    let insertedBorrowers=[];
+    if(newBorrowers.length){
+      insertedBorrowers=await run(db.from("borrowers").insert(newBorrowers).select("*"));
+      insertedBorrowers.forEach(b=>borrowerMap.set(normalizeBorrowerName(b.name),b));
+    }
+    const loanRecords=normalized.filter(r=>r.hasLoan).map(r=>{
+      const b=borrowerMap.get(normalizeBorrowerName(r.name));
+      let due=r.due;
+      if(!due){
+        const d=new Date(r.date+"T00:00:00");
+        if(r.unit==="days")d.setDate(d.getDate()+r.termValue);
+        if(r.unit==="months")d.setMonth(d.getMonth()+r.termValue);
+        if(r.unit==="years")d.setFullYear(d.getFullYear()+r.termValue);
+        due=d.toLocaleDateString("en-CA");
+      }
+      return {user_id:user.id,borrower_id:b.id,amount:r.amount,date_borrowed:r.date,
+        due_date:due,term_value:r.termValue,term_unit:r.unit,
+        interest_enabled:r.interestEnabled,interest_rate:r.rate,
+        interest_period:r.period,interest_cancelled_at:null,interest_waived_at:null,
+        interest_action_notes:null,notes:r.loanNotes};
+    });
+    if(loanRecords.length)await run(db.from("loans").insert(loanRecords));
+    await load();
+    $("bulkImportStatus").textContent=`Import complete: ${insertedBorrowers.length} new borrowers and ${loanRecords.length} utang records imported. Matching existing borrower names were reused.`;
+    $("bulkExcelFile").value="";
+    alert(`Import complete!\nNew borrowers: ${insertedBorrowers.length}\nUtang records: ${loanRecords.length}`);
+  }catch(err){
+    $("bulkImportStatus").textContent="Import failed: "+err.message;
+    alert("Bulk import failed: "+err.message);
+  }finally{$("bulkImportButton").disabled=false;}
+}
+async function mergeBorrowers(){
+  const keepId=$("mergeKeep").value, duplicateId=$("mergeDuplicate").value;
+  if(!keepId||!duplicateId)return alert("Select both borrower records.");
+  if(keepId===duplicateId)return alert("Choose two different borrower records.");
+  const keep=borrowers.find(b=>b.id===keepId), duplicate=borrowers.find(b=>b.id===duplicateId);
+  if(!keep||!duplicate)return alert("The selected borrower records are no longer available. Refresh and try again.");
+  const loanCount=loans.filter(l=>l.borrower_id===duplicateId).length;
+  if(!confirm(`Merge "${duplicate.name}" into "${keep.name}"?\n\n${loanCount} loan(s) will be reassigned. The duplicate borrower record will be deleted. This cannot be automatically undone.`))return;
+  $("mergeBorrowersButton").disabled=true;
+  $("mergeStatus").textContent="Merging borrower records...";
+  try{
+    await run(db.from("loans").update({borrower_id:keepId}).eq("borrower_id",duplicateId).eq("user_id",user.id));
+    await run(db.from("borrowers").delete().eq("id",duplicateId).eq("user_id",user.id));
+    await load();
+    $("mergeStatus").textContent=`Merged "${duplicate.name}" into "${keep.name}". ${loanCount} loan(s) reassigned.`;
+    alert("Borrowers merged successfully.");
+  }catch(err){
+    $("mergeStatus").textContent="Merge failed: "+err.message;
+    alert("Could not complete merge: "+err.message+"\nIf loan reassignment succeeded but deletion failed, refresh and retry; the duplicate may now have no loans.");
+    await load();
+  }finally{$("mergeBorrowersButton").disabled=false;}
+}
+
+function exportCSV(){
+  const rows=[["Borrower","Contact","Date Borrowed","Due Date",
+    "Principal","Interest","Total Due","Paid","Balance","Status"]];
+  loans.forEach(l=>{
+    const bal=balanceFor(l);
+    rows.push([
+      borrowerName(l.borrower_id),
+      borrowers.find(b=>b.id===l.borrower_id)?.phone||"",
+      l.date_borrowed,l.due_date||"",
+      l.amount,interestFor(l),totalDueFor(l),paidFor(l.id),bal,
+      bal===0?"Paid":l.due_date&&l.due_date<today()?"Overdue":"Unpaid"
+    ]);
+  });
+  const csv=rows.map(row=>row.map(v=>
+    '"'+String(v??"").replace(/"/g,'""')+'"'
+  ).join(",")).join("\r\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));
+  a.download="utang-tracker-report.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+db.auth.onAuthStateChange((event,session)=>{
+  setTimeout(async()=>{
+    user=session?.user||null;
+    $("login").style.display=user?"none":"block";
+    $("app").style.display=user?"block":"none";
+    if(user){
+      $("welcome").textContent="Administrator: "+user.email;
+      await load();
+    }
+  },0);
+});
+</script>
+</body>
+</html>
