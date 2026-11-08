@@ -75,6 +75,9 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
 .dash-empty{color:#718078;font-size:13px;padding:8px 0}
 @media(max-width:800px){.dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.dashboard-columns{grid-template-columns:1fr}}
 @media(max-width:420px){.dashboard-grid{grid-template-columns:1fr 1fr}.dash-card{padding:12px}.dash-card strong{font-size:18px}.bar-row{grid-template-columns:78px 1fr auto}}
+.loan-notes-cell{min-width:180px;white-space:normal;max-width:340px}
+.borrower-actions{display:flex;gap:6px;flex-wrap:wrap}
+.borrower-actions button{padding:7px 9px;font-size:12px}
 
 
 .analytics-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
@@ -250,6 +253,19 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
     </div>
   </section>
 
+  <section class="panel">
+    <div class="dashboard-head">
+      <h3>Borrower Loan Summary</h3>
+      <span class="muted">Every borrower and their recorded loan dates and notes</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Borrower</th><th>Date Borrowed</th><th>Due Date</th><th>Loan Notes</th><th>Principal</th><th>Balance</th></tr></thead>
+        <tbody id="dashboardBorrowerLoanRows"></tbody>
+      </table>
+    </div>
+  </section>
+
   </section>
 
   <section class="app-page" id="page-utangs">
@@ -395,6 +411,17 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
       </div>
     </section>
 
+    <section class="panel">
+      <h3>All Borrowers — Loan Dates & Notes</h3>
+      <p class="muted">Loans are listed under each borrower, including the borrowed date, due date, and notes.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Borrower</th><th>Date Borrowed</th><th>Due Date</th><th>Loan Notes</th><th>Principal</th><th>Balance</th></tr></thead>
+          <tbody id="analysisBorrowerLoanRows"></tbody>
+        </table>
+      </div>
+    </section>
+
       <label class="muted">Keep this borrower<select id="mergeKeep"></select></label>
       <label class="muted">Merge this duplicate into the kept borrower<select id="mergeDuplicate"></select></label>
     </div>
@@ -406,7 +433,7 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
     <h3>Borrower Records</h3>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Borrower</th><th>Contact</th><th>Balance</th></tr></thead>
+        <thead><tr><th>Borrower</th><th>Contact</th><th>Balance</th><th>Actions</th></tr></thead>
         <tbody id="borrowerRows"></tbody>
       </table>
     </div>
@@ -419,7 +446,10 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
         <h3 id="profileBorrowerName" style="margin:0 0 4px">Borrower Profile</h3>
         <span id="profileBorrowerContact" class="muted"></span>
       </div>
-      <button type="button" class="secondary" id="closeBorrowerProfile">Close Profile</button>
+      <div class="actions">
+        <button type="button" class="danger" id="deleteProfileBorrower">Delete Borrower & All Loans</button>
+        <button type="button" class="secondary" id="closeBorrowerProfile">Close Profile</button>
+      </div>
     </div>
     <div class="profile-stats">
       <div class="profile-stat"><small>Total Principal</small><strong id="profilePrincipal">₱0.00</strong></div>
@@ -640,6 +670,29 @@ function renderBorrowerPaymentSchedule(borrowerLoans){
     '<tr><td colspan="4">No unpaid loans for this borrower.</td></tr>';
 }
 
+async function deleteBorrower(id){
+  const borrower=borrowers.find(b=>b.id===id);
+  if(!borrower)return alert("Borrower not found. Refresh and try again.");
+  const borrowerLoans=loans.filter(l=>l.borrower_id===id);
+  const loanIds=borrowerLoans.map(l=>l.id);
+  const paymentCount=payments.filter(p=>loanIds.includes(p.loan_id)).length;
+  const message=`Permanently delete "${borrower.name}" and all related records?\\n\\nThis will delete ${borrowerLoans.length} loan(s) and ${paymentCount} payment(s), including their history. This cannot be undone.`;
+  if(!confirm(message))return;
+  try{
+    if(loanIds.length){
+      await run(db.from("payments").delete().in("loan_id",loanIds).eq("user_id",user.id));
+      await run(db.from("loans").delete().eq("borrower_id",id).eq("user_id",user.id));
+    }
+    await run(db.from("borrowers").delete().eq("id",id).eq("user_id",user.id));
+    if(selectedBorrowerProfileId===id)selectedBorrowerProfileId=null;
+    await load();
+    alert(`"${borrower.name}" and all related loans and payments were deleted.`);
+  }catch(err){
+    alert("Could not fully delete this borrower: "+err.message+"\\nCheck database permissions and related-record deletion rules.");
+    await load();
+  }
+}
+
 function openBorrowerProfile(id){
   selectedBorrowerProfileId=id;
   const picker=$("borrowerAnalysisSelect");
@@ -776,6 +829,20 @@ function renderDashboard(){
   $("dashUpcoming").textContent=soon.length;
   $("dashUpcomingAmount").textContent=money(soon.reduce((s,l)=>s+balanceFor(l),0))+" due soon";
   $("dashboardUpdated").textContent="Updated "+new Date().toLocaleString("en-PH");
+
+  const dashboardLoanRows=borrowers.flatMap(b=>{
+    const borrowerLoans=loans.filter(l=>l.borrower_id===b.id);
+    return borrowerLoans.length?borrowerLoans.map(l=>`<tr>
+      <td><strong>${esc(b.name)}</strong></td>
+      <td>${esc(l.date_borrowed||"—")}</td>
+      <td>${esc(loanDueDate(l)||"—")}</td>
+      <td class="loan-notes-cell">${esc(l.notes||"—")}</td>
+      <td>${money(l.amount)}</td>
+      <td>${money(balanceFor(l))}</td>
+    </tr>`):[`<tr><td><strong>${esc(b.name)}</strong></td><td colspan="3" class="muted">No loans recorded</td><td>—</td><td>—</td></tr>`];
+  }).join("");
+  $("dashboardBorrowerLoanRows").innerHTML=dashboardLoanRows||
+    '<tr><td colspan="6">No borrowers or loans recorded.</td></tr>';
 
   const monthLabels=[];
   for(let i=5;i>=0;i--){
@@ -914,8 +981,22 @@ function render(){
   $("borrowerRows").innerHTML=borrowers.map(b=>{
     const bal=loans.filter(l=>l.borrower_id===b.id)
       .reduce((s,l)=>s+balanceFor(l),0);
-    return `<tr><td><button type="button" class="borrower-name-link" data-profile-borrower="${esc(b.id)}">${esc(b.name)}</button></td><td>${esc(b.phone)}</td><td>${money(bal)}</td></tr>`;
-  }).join("")||'<tr><td colspan="3">No borrowers yet.</td></tr>';
+    return `<tr><td><button type="button" class="borrower-name-link" data-profile-borrower="${esc(b.id)}">${esc(b.name)}</button></td><td>${esc(b.phone)}</td><td>${money(bal)}</td><td><button type="button" class="danger" data-delete-borrower="${esc(b.id)}">Delete</button></td></tr>`;
+  }).join("")||'<tr><td colspan="4">No borrowers yet.</td></tr>';
+
+  const analysisRows=borrowers.flatMap(b=>{
+    const borrowerLoans=loans.filter(l=>l.borrower_id===b.id);
+    return borrowerLoans.length?borrowerLoans.map(l=>`<tr>
+      <td><button type="button" class="borrower-name-link" data-profile-borrower="${esc(b.id)}">${esc(b.name)}</button></td>
+      <td>${esc(l.date_borrowed||"—")}</td>
+      <td>${esc(loanDueDate(l)||"—")}</td>
+      <td class="loan-notes-cell">${esc(l.notes||"—")}</td>
+      <td>${money(l.amount)}</td>
+      <td>${money(balanceFor(l))}</td>
+    </tr>`):[`<tr><td><button type="button" class="borrower-name-link" data-profile-borrower="${esc(b.id)}">${esc(b.name)}</button></td><td colspan="3" class="muted">No loans recorded</td><td>—</td><td>—</td></tr>`];
+  }).join("");
+  $("analysisBorrowerLoanRows").innerHTML=analysisRows||
+    '<tr><td colspan="6">No borrowers recorded.</td></tr>';
 
   $("loanRows").innerHTML=loans.map(l=>{
     const bal=balanceFor(l), interest=interestFor(l), total=totalDueFor(l);
@@ -956,8 +1037,17 @@ function render(){
 }
 
 $("borrowerRows").addEventListener("click",e=>{
+  const deleteButton=e.target.closest("[data-delete-borrower]");
+  if(deleteButton){deleteBorrower(deleteButton.getAttribute("data-delete-borrower"));return;}
   const button=e.target.closest("[data-profile-borrower]");
   if(button)openBorrowerProfile(button.getAttribute("data-profile-borrower"));
+});
+$("analysisBorrowerLoanRows").addEventListener("click",e=>{
+  const button=e.target.closest("[data-profile-borrower]");
+  if(button)openBorrowerProfile(button.getAttribute("data-profile-borrower"));
+});
+$("deleteProfileBorrower").addEventListener("click",()=>{
+  if(selectedBorrowerProfileId)deleteBorrower(selectedBorrowerProfileId);
 });
 $("closeBorrowerProfile").addEventListener("click",()=>{
   selectedBorrowerProfileId=null;
