@@ -104,6 +104,15 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
 .profile-empty{padding:20px;text-align:center;color:#718078}
 @media(max-width:700px){.profile-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.timeline-item{grid-template-columns:85px 1fr}.timeline-amount{grid-column:2}}
 
+
+.app-nav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 20px;padding:7px;background:#e8f0eb;border-radius:12px;position:sticky;top:0;z-index:5}
+.nav-tab{background:transparent;color:#315746;padding:11px 16px;border-radius:8px;font-weight:700}
+.nav-tab.active{background:#145c43;color:#fff;box-shadow:0 2px 6px #183b2920}
+.app-page{display:none}
+.app-page.active{display:block}
+.page-intro{margin:0 0 14px;color:#718078}
+@media(max-width:520px){.app-nav{display:grid;grid-template-columns:1fr 1fr}.nav-tab:last-child{grid-column:1/-1}}
+
 </style>
 </head>
 <body>
@@ -133,7 +142,14 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
     </div>
   </div>
 
+  <nav class="app-nav" aria-label="Main navigation">
+    <button type="button" class="nav-tab active" data-page="dashboard">Dashboard & Summary</button>
+    <button type="button" class="nav-tab" data-page="utangs">Borrowers & Utangs</button>
+    <button type="button" class="nav-tab" data-page="payments">Payments</button>
+  </nav>
 
+
+  <section class="app-page" id="page-dashboard">
   <div class="dashboard-head">
     <h3>Dashboard Overview</h3>
     <span class="muted" id="dashboardUpdated">Live summary of your lending records</span>
@@ -209,6 +225,9 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
     <div class="stat"><small>Borrowers</small><h2 id="borrowerCount">0</h2></div>
   </section>
 
+  </section>
+
+  <section class="app-page" id="page-utangs">
   <section class="panel">
     <h3>Register Borrower</h3>
     <form id="borrowerForm">
@@ -274,18 +293,6 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
     </form>
   </section>
 
-  <section class="panel">
-    <h3>Record Payment</h3>
-    <form id="paymentForm">
-      <select id="paymentLoan" required>
-        <option value="">Select outstanding loan</option>
-      </select>
-      <input id="paymentAmount" type="number" min="0.01" step="0.01" placeholder="Payment amount (₱)" required>
-      <label class="muted">Payment date<input id="paymentDate" type="date" required></label>
-      <input id="paymentNotes" placeholder="Payment notes (optional)">
-      <button>Save Payment</button>
-    </form>
-  </section>
 
   <section class="panel">
     <h3>Bulk Import Borrowers & Utangs (Excel)</h3>
@@ -378,6 +385,23 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
     </div>
   </section>
 
+  </section>
+
+  <section class="app-page" id="page-payments">
+    <div class="dashboard-head"><h3>Payments</h3><span class="muted">Record collections and review payment history</span></div>
+  <section class="panel">
+    <h3>Record Payment</h3>
+    <form id="paymentForm">
+      <select id="paymentLoan" required>
+        <option value="">Select outstanding loan</option>
+      </select>
+      <input id="paymentAmount" type="number" min="0.01" step="0.01" placeholder="Payment amount (₱)" required>
+      <label class="muted">Payment date<input id="paymentDate" type="date" required></label>
+      <input id="paymentNotes" placeholder="Payment notes (optional)">
+      <button>Save Payment</button>
+    </form>
+  </section>
+
   <section class="panel">
     <h3>Payment History</h3>
     <div class="table-wrap">
@@ -387,6 +411,8 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
       </table>
     </div>
   </section>
+  </section>
+
 </main>
 </div>
 
@@ -500,6 +526,7 @@ function borrowerName(id){
 
 
 function openBorrowerProfile(id){
+  showPage("utangs");
   selectedBorrowerProfileId=id;
   renderBorrowerProfile();
   const panel=$("borrowerProfilePanel");
@@ -832,6 +859,23 @@ $("borrowerChartSelect").addEventListener("change",()=>{
 $("downloadImportTemplate").addEventListener("click",downloadExcelTemplate);
 $("bulkImportButton").addEventListener("click",bulkImport);
 $("mergeBorrowersButton").addEventListener("click",mergeBorrowers);
+
+
+function showPage(page){
+  const valid=["dashboard","utangs","payments"].includes(page)?page:"dashboard";
+  document.querySelectorAll(".app-page").forEach(el=>el.classList.toggle("active",el.id==="page-"+valid));
+  document.querySelectorAll(".nav-tab").forEach(btn=>btn.classList.toggle("active",btn.dataset.page===valid));
+  if(valid!=="utangs"){
+    // Keep borrower profile visible only while working in the borrower/utang section.
+    const profile=$("borrowerProfilePanel");
+    if(profile) profile.style.display="none";
+  }else if(selectedBorrowerProfileId){
+    renderBorrowerProfile();
+  }
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+document.querySelectorAll(".nav-tab").forEach(btn=>btn.addEventListener("click",()=>showPage(btn.dataset.page)));
+showPage("dashboard");
 
 $("loginForm").addEventListener("submit",login);
 
