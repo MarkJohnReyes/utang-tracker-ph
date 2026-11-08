@@ -113,6 +113,15 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
 .page-intro{margin:0 0 14px;color:#718078}
 @media(max-width:520px){.app-nav{display:grid;grid-template-columns:1fr 1fr}.nav-tab:last-child{grid-column:1/-1}}
 
+
+.borrower-select-panel{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+.borrower-select-panel label{flex:1;min-width:240px}
+.schedule-note{background:#f3f8f5;border-left:4px solid #137c55;padding:12px;border-radius:7px;margin:10px 0 15px;color:#52695d;font-size:13px}
+.schedule-breakdown{margin:6px 0 0;padding-left:18px;color:#52695d;font-size:13px}
+.schedule-breakdown li{margin:4px 0}
+.schedule-total{font-weight:700;white-space:nowrap}
+@media(max-width:700px){.borrower-select-panel{display:block}.borrower-select-panel label{display:block;margin-bottom:10px}}
+
 </style>
 </head>
 <body>
@@ -145,6 +154,7 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
   <nav class="app-nav" aria-label="Main navigation">
     <button type="button" class="nav-tab active" data-page="dashboard">Dashboard & Summary</button>
     <button type="button" class="nav-tab" data-page="utangs">Borrowers & Utangs</button>
+    <button type="button" class="nav-tab" data-page="borrower-analysis">Borrower Analysis</button>
     <button type="button" class="nav-tab" data-page="payments">Payments</button>
   </nav>
 
@@ -223,6 +233,21 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
     <div class="stat"><small>Outstanding Balance</small><h2 id="balance">₱0.00</h2></div>
     <div class="stat"><small>Total Collected</small><h2 id="collected">₱0.00</h2></div>
     <div class="stat"><small>Borrowers</small><h2 id="borrowerCount">0</h2></div>
+  </section>
+
+
+  <section class="panel">
+    <div class="dashboard-head">
+      <h3>Payment Due Schedule</h3>
+      <span class="muted">Upcoming and overdue loan maturities</span>
+    </div>
+    <p class="schedule-note">Each row groups the outstanding amounts due on a date. Expand the breakdown to see exactly which utangs make up the scheduled total. The current app stores one due date per loan, so this schedule uses each loan's maturity date; it does not invent weekly or monthly installments.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Due Date</th><th>Loans Included</th><th>Borrowers</th><th>Scheduled Amount</th><th>Breakdown of Utangs Included</th></tr></thead>
+        <tbody id="paymentScheduleRows"></tbody>
+      </table>
+    </div>
   </section>
 
   </section>
@@ -313,40 +338,7 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
   <section class="panel">
     <h3>Merge Duplicate Borrowers</h3>
     <p class="muted">Choose the borrower record to keep and the duplicate record to merge into it. All loans will be reassigned to the kept borrower before the duplicate is deleted. Payments remain attached to their original loans.</p>
-    <div class="merge-grid">
-      <label class="muted">Keep this borrower<select id="mergeKeep"></select></label>
-      <label class="muted">Merge this duplicate into the kept borrower<select id="mergeDuplicate"></select></label>
-    </div>
-    <button type="button" id="mergeBorrowersButton" class="danger" style="margin-top:10px">Merge Borrowers</button>
-    <p id="mergeStatus" class="muted" aria-live="polite"></p>
-  </section>
-
-  <section class="panel">
-    <h3>Borrower Records</h3>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Borrower</th><th>Contact</th><th>Balance</th></tr></thead>
-        <tbody id="borrowerRows"></tbody>
-      </table>
-    </div>
-  </section>
-
-
-  <section class="panel" id="borrowerProfilePanel" style="display:none">
-    <div class="profile-top">
-      <div>
-        <h3 id="profileBorrowerName" style="margin:0 0 4px">Borrower Profile</h3>
-        <span id="profileBorrowerContact" class="muted"></span>
-      </div>
-      <button type="button" class="secondary" id="closeBorrowerProfile">Close Profile</button>
-    </div>
-    <div class="profile-stats">
-      <div class="profile-stat"><small>Total Principal</small><strong id="profilePrincipal">₱0.00</strong></div>
-      <div class="profile-stat"><small>Interest Accrued</small><strong id="profileInterest">₱0.00</strong></div>
-      <div class="profile-stat"><small>Total Paid</small><strong id="profilePaid">₱0.00</strong></div>
-      <div class="profile-stat"><small>Remaining Balance</small><strong id="profileBalance">₱0.00</strong></div>
-    </div>
-    <div class="profile-section">
+    <div class="merge-grid"><div class="profile-section">
       <h4>Loan History</h4>
       <div class="table-wrap">
         <table>
@@ -387,6 +379,57 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
 
   </section>
 
+  <section class="app-page" id="page-borrower-analysis">
+    <div class="dashboard-head">
+      <h3>Borrower Analysis</h3>
+      <span class="muted">Select a borrower to review all utangs, payments, and balances</span>
+    </div>
+    <section class="panel">
+      <div class="borrower-select-panel">
+        <label class="muted">Select borrower
+          <select id="borrowerAnalysisSelect">
+            <option value="">Choose a borrower</option>
+          </select>
+        </label>
+        <button type="button" class="secondary" id="clearBorrowerAnalysis">Clear selection</button>
+      </div>
+    </section>
+
+      <label class="muted">Keep this borrower<select id="mergeKeep"></select></label>
+      <label class="muted">Merge this duplicate into the kept borrower<select id="mergeDuplicate"></select></label>
+    </div>
+    <button type="button" id="mergeBorrowersButton" class="danger" style="margin-top:10px">Merge Borrowers</button>
+    <p id="mergeStatus" class="muted" aria-live="polite"></p>
+  </section>
+
+  <section class="panel">
+    <h3>Borrower Records</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Borrower</th><th>Contact</th><th>Balance</th></tr></thead>
+        <tbody id="borrowerRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+
+  <section class="panel" id="borrowerProfilePanel" style="display:none">
+    <div class="profile-top">
+      <div>
+        <h3 id="profileBorrowerName" style="margin:0 0 4px">Borrower Profile</h3>
+        <span id="profileBorrowerContact" class="muted"></span>
+      </div>
+      <button type="button" class="secondary" id="closeBorrowerProfile">Close Profile</button>
+    </div>
+    <div class="profile-stats">
+      <div class="profile-stat"><small>Total Principal</small><strong id="profilePrincipal">₱0.00</strong></div>
+      <div class="profile-stat"><small>Interest Accrued</small><strong id="profileInterest">₱0.00</strong></div>
+      <div class="profile-stat"><small>Total Paid</small><strong id="profilePaid">₱0.00</strong></div>
+      <div class="profile-stat"><small>Remaining Balance</small><strong id="profileBalance">₱0.00</strong></div>
+    </div>
+    
+  </section>
+
   <section class="app-page" id="page-payments">
     <div class="dashboard-head"><h3>Payments</h3><span class="muted">Record collections and review payment history</span></div>
   <section class="panel">
@@ -417,7 +460,7 @@ th{color:#65796e;font-size:12px;text-transform:uppercase}
 </div>
 
 <script>
-// 1. ADD YOUR SUPABASE PROJECT DETAILS HERE
+// 1. ADD YOUR  PROJECT DETAILS HERE
 const SUPABASE_URL = "https://fcrkqvzlfvrlmkzcnmdv.supabase.co";
 const SUPABASE_KEY = "sb_publishable_L8Y_8MQe0dwu3ksvRUnkig_onPgQDfR";
 
@@ -525,9 +568,58 @@ function borrowerName(id){
 
 
 
+
+function loanDueDate(loan){
+  if(loan.due_date) return loan.due_date;
+  if(!loan.date_borrowed || !loan.term_value) return "";
+  const d=new Date(loan.date_borrowed+"T00:00:00");
+  const n=Number(loan.term_value);
+  if(loan.term_unit==="days") d.setDate(d.getDate()+n);
+  else if(loan.term_unit==="years") d.setFullYear(d.getFullYear()+n);
+  else d.setMonth(d.getMonth()+n);
+  return d.toLocaleDateString("en-CA");
+}
+function renderPaymentSchedule(){
+  const body=$("paymentScheduleRows");
+  if(!body) return;
+  const grouped={};
+  loans.filter(l=>balanceFor(l)>0.009).forEach(l=>{
+    const due=loanDueDate(l);
+    if(!due) return;
+    if(!grouped[due]) grouped[due]=[];
+    grouped[due].push(l);
+  });
+  const dates=Object.keys(grouped).sort();
+  if(!dates.length){
+    body.innerHTML='<tr><td colspan="5">No active loans with a due date or payment term.</td></tr>';
+    return;
+  }
+  body.innerHTML=dates.map(date=>{
+    const items=grouped[date];
+    const total=items.reduce((sum,l)=>sum+balanceFor(l),0);
+    const borrowerCount=new Set(items.map(l=>l.borrower_id)).size;
+    const details=items.map(l=>{
+      const borrower=borrowerName(l.borrower_id);
+      const amount=balanceFor(l);
+      const term=l.term_value?`${l.term_value} ${l.term_unit||"period"}`:"Recorded due date";
+      return `<li><strong>${esc(borrower)}</strong> — Utang dated ${esc(l.date_borrowed||"—")}: ${money(amount)} remaining <span class="muted">(${esc(term)}; principal ${money(l.amount)}, paid ${money(paidFor(l.id))})</span></li>`;
+    }).join("");
+    const status=date<today()?' <span class="status overdue">Overdue</span>':date===today()?' <span class="status">Due today</span>':'';
+    return `<tr>
+      <td>${esc(date)}${status}</td>
+      <td>${items.length}</td>
+      <td>${borrowerCount}</td>
+      <td class="schedule-total">${money(total)}</td>
+      <td><details><summary>View ${items.length} utang${items.length===1?"":"s"}</summary><ul class="schedule-breakdown">${details}</ul></details></td>
+    </tr>`;
+  }).join("");
+}
+
 function openBorrowerProfile(id){
-  showPage("utangs");
   selectedBorrowerProfileId=id;
+  const picker=$("borrowerAnalysisSelect");
+  if(picker) picker.value=id;
+  showPage("borrower-analysis");
   renderBorrowerProfile();
   const panel=$("borrowerProfilePanel");
   if(panel) panel.scrollIntoView({behavior:"smooth",block:"start"});
@@ -764,6 +856,14 @@ function render(){
 
   renderDashboard();
   renderBorrowerProfile();
+  renderPaymentSchedule();
+  const analysisSelect=$("borrowerAnalysisSelect");
+  if(analysisSelect){
+    const current=selectedBorrowerProfileId||analysisSelect.value;
+    analysisSelect.innerHTML='<option value="">Choose a borrower</option>'+
+      borrowers.map(b=>`<option value="${b.id}">${esc(b.name)}${b.phone?" · "+esc(b.phone):""}</option>`).join("");
+    analysisSelect.value=borrowers.some(b=>b.id===current)?current:"";
+  }
   $("balance").textContent=money(outstanding);
   $("collected").textContent=money(collected);
   $("borrowerCount").textContent=borrowers.length;
@@ -862,10 +962,10 @@ $("mergeBorrowersButton").addEventListener("click",mergeBorrowers);
 
 
 function showPage(page){
-  const valid=["dashboard","utangs","payments"].includes(page)?page:"dashboard";
+  const valid=["dashboard","utangs","borrower-analysis","payments"].includes(page)?page:"dashboard";
   document.querySelectorAll(".app-page").forEach(el=>el.classList.toggle("active",el.id==="page-"+valid));
   document.querySelectorAll(".nav-tab").forEach(btn=>btn.classList.toggle("active",btn.dataset.page===valid));
-  if(valid!=="utangs"){
+  if(valid!=="borrower-analysis"){
     // Keep borrower profile visible only while working in the borrower/utang section.
     const profile=$("borrowerProfilePanel");
     if(profile) profile.style.display="none";
@@ -875,6 +975,15 @@ function showPage(page){
   window.scrollTo({top:0,behavior:"smooth"});
 }
 document.querySelectorAll(".nav-tab").forEach(btn=>btn.addEventListener("click",()=>showPage(btn.dataset.page)));
+$("borrowerAnalysisSelect").addEventListener("change",e=>{
+  selectedBorrowerProfileId=e.target.value||null;
+  renderBorrowerProfile();
+});
+$("clearBorrowerAnalysis").addEventListener("click",()=>{
+  selectedBorrowerProfileId=null;
+  $("borrowerAnalysisSelect").value="";
+  renderBorrowerProfile();
+});
 showPage("dashboard");
 
 $("loginForm").addEventListener("submit",login);
